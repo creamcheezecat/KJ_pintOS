@@ -5,10 +5,13 @@
 #include "vm/inspect.h"
 #include "include/threads/vaddr.h"
 #include "include/threads/mmu.h"
-#include ""
 
-static unsigned vm_hash_func(const struct hash_elem *,void *);
-static bool vm_less_func(const struct hash_elem *, const struct hash_elem *);
+
+static struct list frame_list;
+
+
+static unsigned page_hash_func(const struct hash_elem *,void *);
+static bool page_less_func(const struct hash_elem *, const struct hash_elem *);
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -21,8 +24,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
-
-	//hash_init(vm,vm_hash_func,vm_less_func,NULL); /* 이게 맞아 ? */
+	list_init(&frame_list);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -63,7 +65,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	/* Check wheter the upage is already occupied or not. */
 	/* upage가 이미 사용 중인지 확인합니다. */
-	if (spt_find_page (spt, upage) == NULL) {
+	if (spt_find_page (spt, upage) == NULL) {// 페이지 생성????
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
@@ -72,6 +74,16 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		TODO: 그런 다음 uninit_new를 호출하여 "uninit" 페이지 구조체를 생성합니다.
 		TODO: uninit_new를 호출한 후에 필드를 수정해야 합니다. */
 		/* TODO: 페이지를 spt에 삽입합니다. */
+
+		struct page *newpage = (struct page *)malloc(sizeof(struct page));
+
+		bool (*page_init)(struct page *, enum vm_type, void *) = type == VM_ANON 
+		? anon_initializer : file_backed_initializer;
+
+		uninit_new(newpage,upage,init,type,aux,page_init);
+		newpage->writable = writable;
+
+	 	spt_insert_page(spt,newpage);
 	}
 err:
 	return false;
@@ -89,7 +101,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 		struct page *target_page = hash_entry(hash_cur(&i), struct page, elem);
 
 		if(target_page->va == va){
-			page = target_page
+			page = target_page;
 			break;
 		}
 	}
@@ -155,13 +167,20 @@ vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
 	frame->kva  = palloc_get_page(PAL_ZERO);
-	if(farme->kva == NULL){
+	
+	list_push_back(&frame_list,&frame->elem);
+
+	if(frame->kva == NULL){
 		// 페이지 대체??
 	}
 	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+
+	list_push_back(&frame_list,&frame->elem);
+	
+
 
 	return frame;
 }
@@ -183,6 +202,7 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+			
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
@@ -230,8 +250,8 @@ vm_do_claim_page (struct page *page) {
 	struct thread *t = thread_current();
 
 	if(pml4_get_page (t->pml4, page->va) == NULL){//물리 주소가 비어있다.
-		if(!pml4_set_page (t->pml4, page->va, frame->va, page->writable)){
-			// 할당하지 못했다
+		if(!pml4_set_page (t->pml4, page->va, frame->kva, page->writable)){
+			// 할당하지 못했다면
 			return false;
 		}
 	}
@@ -244,14 +264,6 @@ void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	hash_init(&spt->pages,page_hash_func,page_less_func,NULL);
 }
-
-/* 	spt->vaddr = NULL;
-    spt->writable = false;	
-    spt->is_loaded = false;
-    spt->file = NULL;
-    spt->offset = 0;
-    spt->read_bytes = 0;
-    spt->zero_bytes = 0; */
 
 /* Copy supplemental page table from src to dst */
 bool
@@ -274,67 +286,14 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 /*================================================*/
 
 static unsigned
-page_hash_func(const struct hash_elem *e,void *aux){
+page_hash_func(const struct hash_elem *e,void *aux UNUSED){
 	int vaddr_int = (int)hash_entry(e,struct page, elem)->va;
 	return hash_int(vaddr_int);
 }
 
 static bool
-page_less_func(const struct hash_elem *a, const struct hash_elem *b){
-	return hash_entry(a,struct page, elem)->va < hash_entry(b,struct page, elem)->va
+page_less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED){
+	return hash_entry(a,struct page, elem)->va < hash_entry(b,struct page, elem)->va;
 }
 
 /*================================================*/
-
-/* bool
-insert_spt(struct hash *vm, struct supplemental_page_table *spt){
-	struct hash_elem * success = hash_insert(vm,spt->elem);
-	
-	if(success == NULL){
-		return true;
-	}
-	return false;
-}
-
-bool
-delete_spt(struct hash *vm, struct supplemental_page_table *spt){
-	struct hash_elem * success = hash_delete(vm,spt->elem);
-	
-	if(success == NULL){
-		return false;
-	}
-	return true;
-} */
-/* 가상 주소를 가지고 보조 페이지 테이블을 찾는 함수 */
-/* struct supplemental_page_table *
-find_spt(void *vaddr){
-	struct thread * curr = thread_current();
-	struct supplemental_page_table * temp = pg_round_down(vaddr);
-	struct hash_elem * vaddr_hash = hash_find(curr->vm,temp->elem);
-	if(vaddr_hash == NULL){
-		return NULL
-	}
-	return hash_entry(vaddr_hash,struct supplemental_page_table,elem);
-}
-
-void 
-vm_destroy(struct hash *vm){
-	hash_destroy(vm,vm_destory_func);
-}
-
-static void 
-vm_destory_func (struct hash_elem *e, void *aux UNUSED){
-	struct supplemental_page_table *spt_curr = hash_entry(e,struct supplemental_page_table,elem);
-	struct thread * t_curr = thread_current();
-	if(spt_curr->is_loaded){
-		void *va = spt_curr->vaddr;
-		uint64_t *p4 = t_curr->pml4;
-		//페이지 할당 헤제 , 맵핑 헤제 (palloc_free_page(), pagedir_clear_page())
-		// 물리 페이지를 해제
-		palloc_free_page(pml4_get_page(p4,va));
-
-		// 페이지 매핑을 제거
-		pml4_clear_page(p4,va);
-	}
-	//supplemental_page_table_kill(curr);
-} */

@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#define VM
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -81,7 +82,7 @@ process_create_initd (const char *file_name) {
 static void
 initd (void *f_name) {
 #ifdef VM
-	tal_page_table_init (&thread_current ()->spt);
+	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 	process_init ();
 
@@ -917,6 +918,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일로부터 세그먼트를 로드합니다. /
 	/ TODO: 이 함수는 주소 VA에 대해 첫 번째 페이지 폴트가 발생할 때 호출됩니다. /
 	/ TODO: 이 함수를 호출할 때 VA는 사용 가능합니다. */
+	
 
 }
 
@@ -964,26 +966,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* TODO: 정보를 전달하기 위해 aux를 설정합니다. lazy_load_segment에게 전달됩니다. */
-		/* vm_entry 생성 (malloc 사용) */
-		/* vm_entry 멤버들 설정, 가상페이지가 요구될 때 읽어야할 파일의 오프
-		셋과 사이즈, 마지막에 패딩할 제로 바이트 등등 */
-		/* insert_vme() 함수를 사용해서 생성한 vm_entry를 해시테이블에 추
-		가 */
-		/* struct supplemental_page_table *spt = (struct supplemental_page_table *)malloc(sizeof(supplemental_page_table ));
-		spt->vaddr = upage;
-		spt->writable = writable;
-		spt->is_loaded = false;
-		spt->file = file;
-		spt->offset = ofs,
-		spt->read_bytes = page_read_bytes;
-		spt->zero_bytes = page_zero_bytes;
+	
 
-		insert_spt(&thread_current()->vm,spt);
-		
-		void *aux = NULL;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
-			return false; */
+
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -1008,22 +993,8 @@ setup_stack (struct intr_frame *if_) {
 	TODO: 성공하면 rsp를 적절히 설정합니다.
 	TODO: 페이지를 스택으로 표시해야 합니다.
 	TODO: 여기에 코드를 작성하세요 */
-    // success = grow_stack(stack_bottom);
-    // if (!success)
-    //     return false;
+	
 
-    // /* rsp를 스택의 가장 위로 설정합니다. */
-    // if_->rsp = (void *)((uint8_t *)PHYS_BASE - PGSIZE);
-
-    // /* 페이지를 스택으로 표시합니다. */
-    // struct supplemental_page_table *spt = (struct supplemental_page_table *)malloc(sizeof(supplemental_page_table ));
-    // spt->vaddr = stack_bottom;     // 가상 페이지 번호
-    // spt->writable = true;          // 쓰기 가능 여부
-    // spt->is_loaded = true;         // 물리 메모리에 탑재되었는지 여부
-    // spt->type = VM_STACK;          // 가상 메모리 타입을 스택으로 설정
-
-    // /* 생성한 가상 메모리 엔트리를 해시 테이블에 추가 */
-    // insert_vme(&thread_current()->vm, spt);
 
     return success;
 }

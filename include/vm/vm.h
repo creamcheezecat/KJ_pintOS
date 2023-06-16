@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "include/lib/kernel/hash.h"
 #include "include/lib/string.h"
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -19,6 +20,8 @@ enum vm_type {
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
+	/*저장 정보를 위한 보조 비트 플래그 마커입니다. 
+	더 많은 마커를 추가할 수 있으며, 값이 int에 맞을 때까지 추가할 수 있습니다.*/
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
@@ -56,7 +59,7 @@ struct page {
 
 	bool readable;
 	bool writable;
-	bool is_loaded;						/* 물리메모리의 탑재 여부를 알려주는 플래그 */
+	bool is_loaded;			/* 물리메모리의 탑재 여부를 알려주는 플래그 */
 	
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -115,12 +118,6 @@ struct page_operations {
 struct supplemental_page_table {
 	struct hash pages;
 };
-
-bool insert_spt(struct hash *vm, struct supplemental_page_table *spt);
-bool delete_spt(struct hash *vm, struct supplemental_page_table *spt);
-struct supplemental_page_table *find_spt(void *vaddr);
-void vm_destroy(struct hash *vm);
-
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);

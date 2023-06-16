@@ -36,6 +36,11 @@ uninit_new (struct page *page, void *va, vm_initializer *init,
 	*page = (struct page) {
 		.operations = &uninit_ops,
 		.va = va,
+		/* 수정 한 부분 
+		.readable = false,
+		.writable = false,
+		.is_loaded = false,
+		*/
 		.frame = NULL, /* no frame for now */
 		.uninit = (struct uninit_page) {
 			.init = init,
@@ -52,6 +57,7 @@ uninit_initialize (struct page *page, void *kva) {
 	struct uninit_page *uninit = &page->uninit;
 
 	/* Fetch first, page_initialize may overwrite the values */
+	/*먼저 가져오고, page_initialize 함수가 값을 덮어쓸 수 있습니다*/
 	vm_initializer *init = uninit->init;
 	void *aux = uninit->aux;
 
@@ -64,9 +70,15 @@ uninit_initialize (struct page *page, void *kva) {
  * to other page objects, it is possible to have uninit pages when the process
  * exit, which are never referenced during the execution.
  * PAGE will be freed by the caller. */
+/* uninit_page가 보유한 리소스를 해제하세요. 
+대부분의 페이지는 다른 페이지 객체로 변환되지만, 
+프로세스가 종료될 때 실행 중에 참조되지 않는 초기화되지 않은 페이지를 가질 수 있습니다.
+PAGE는 호출자에 의해 해제될 것입니다. */
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
+
+
 }
