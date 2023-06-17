@@ -10,8 +10,8 @@
 static struct list frame_list;
 
 
-static unsigned page_hash_func(const struct hash_elem *,void *);
-static bool page_less_func(const struct hash_elem *, const struct hash_elem *);
+static uint64_t page_hash_func(const struct hash_elem *,void *);
+static bool page_less_func(const struct hash_elem *, const struct hash_elem *,void *);
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -285,10 +285,10 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 }
 /*================================================*/
 
-static unsigned
+static uint64_t
 page_hash_func(const struct hash_elem *e,void *aux UNUSED){
-	int vaddr_int = (int)hash_entry(e,struct page, elem)->va;
-	return hash_int(vaddr_int);
+	char *vaddr_int = (char *)hash_entry(e,struct page, elem)->va;
+	return hash_string(vaddr_int);
 }
 
 static bool
