@@ -249,7 +249,9 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-	
+
+	supplemental_page_table_init(&thread_current()->spt);// 임시?
+
 	lock_acquire(&filesys_lock);
 	/* And then load the binary */
 	success = load (file_name, &_if);
@@ -912,26 +914,10 @@ install_page (void *upage, void *kpage, bool writable) {
  * 상단 블록. */
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-
-		/* // Get a page of memory.
-		uint8_t *kpage = palloc_get_page (PAL_USER);
-		if (kpage == NULL)
-			return false;
-
-		// Load this page.
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
-			palloc_free_page (kpage);
-			return false;
-		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-		
-		//Add the page to the process's address space. 
-		if (!install_page (upage, kpage, writable)) {
-			printf("fail\n");
-			palloc_free_page (kpage);
-			return false;
-		} */
+	ASSERT(page->frame != NULL);
+    ASSERT(aux != NULL);
+	
+	void *kpage = page->frame->kva;
 
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -939,15 +925,13 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일로부터 세그먼트를 로드합니다. /
 	/ TODO: 이 함수는 주소 VA에 해 첫 번째 페이지 폴트가 발생할 때 호출됩니다. /
 	/ TODO: 이 함수를 호출할 때 VA는 사용 가능합니다. */
-	struct file_container *fc = (struct file_container *)aux;
-	struct file *file = fc->file;
-	off_t offset = fc->offset;
-    size_t page_read_bytes = fc->read_bytes;
-    size_t page_zero_bytes = fc->zero_bytes;
-	
-	free(fc);
+	struct file_page *fp = (struct file_page *)aux;
+	struct file *file = fp->file;
+	off_t offset = fp->offset;
+    size_t page_read_bytes = fp->read_bytes;
+    size_t page_zero_bytes = fp->zero_bytes;
 
-	void *kpage = page->frame->kva;
+	free(fp);
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
 		return false;
@@ -1002,13 +986,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* TODO: 정보를 전달하기 위해 aux를 설정합니다. lazy_load_segment에게 전달됩니다. */
-		struct file_container *fc = (struct file_container *)malloc(sizeof(struct file_container));
-		fc->file = file;
-		fc->offset = ofs;
-		fc->read_bytes = read_bytes;
-		fc->zero_bytes = zero_bytes;
+		struct file_page *fp = (struct file_page *)malloc(sizeof(struct file_page));
+
+		fp->file = file;
+		fp->offset = ofs;
+		fp->read_bytes = read_bytes;
+		fp->zero_bytes = zero_bytes;
 		
-		void *aux = fc;
+		void *aux = fp;
+		// 여기가 문제
 		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment,aux)){
 			return false;
 		}
@@ -1037,7 +1023,7 @@ setup_stack (struct intr_frame *if_) {
 	TODO: 페이지를 스택으로 표시해야 합니다.
 	TODO: 여기에 코드를 작성하세요 */
 	
-	if(vm_alloc_page(VM_MARKER_0, stack_bottom, 1)){
+	if(vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, 1)){
 		success = vm_claim_page(stack_bottom);
 		if(success){
 			if_->rsp = USER_STACK;
@@ -1047,22 +1033,4 @@ setup_stack (struct intr_frame *if_) {
     return success;
 }
 
-/*======================================================================*/
-
-/* static bool grow_stack(void *addr){
-	bool success = false;
-
-    if (is_user_vaddr(addr) && !is_kernel_vaddr(addr)) {
-        void *stack_page = palloc_get_page(PAL_USER | PAL_ZERO);
-        if (stack_page != NULL) {
-            success = install_page(addr, stack_page, true);
-            if (success)
-                memset(stack_page, 0, PGSIZE);
-            else
-                palloc_free_page(stack_page);
-        }
-    }
-
-    return success;
-} */
 #endif /* VM */

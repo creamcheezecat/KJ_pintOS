@@ -182,6 +182,14 @@ disk_print_stats (void) {
 1:0 - scratch
 1:1 - swap
 */
+/* DEV_NO로 지정된 디스크를 반환합니다. 
+마스터(0) 또는 슬레이브(1)로 구분됩니다. CHAN_NO로 지정된 채널 내에서 작동합니다.
+Pintos는 다음과 같이 디스크를 사용합니다:
+0:0 - 부트 로더, 커맨드 라인 인수 및 운영 체제 커널
+0:1 - 파일 시스템
+1:0 - 스크래치
+1:1 - 스왑
+*/
 struct disk *
 disk_get (int chan_no, int dev_no) {
 	ASSERT (dev_no == 0 || dev_no == 1);
@@ -408,6 +416,9 @@ print_ata_string (char *string, size_t size) {
 /* Selects device D, waiting for it to become ready, and then
    writes SEC_NO to the disk's sector selection registers.  (We
    use LBA mode.) */
+/* 장치 D를 선택하고, 
+준비 상태가 될 때까지 대기한 다음 디스크의 섹터 
+선택 레지스터에 SEC_NO를 기록합니다. (LBA 모드를 사용합니다.) */
 static void
 select_sector (struct disk *d, disk_sector_t sec_no) {
 	struct channel *c = d->channel;
@@ -426,6 +437,7 @@ select_sector (struct disk *d, disk_sector_t sec_no) {
 
 /* Writes COMMAND to channel C and prepares for receiving a
    completion interrupt. */
+/* C 채널로 COMMAND를 기록하고 완료 인터럽트를 받을 준비를 합니다. */
 static void
 issue_pio_command (struct channel *c, uint8_t command) {
 	/* Interrupts must be enabled or our semaphore will never be
@@ -555,6 +567,12 @@ inspect_write_cnt (struct intr_frame *f) {
  *   @RCX - dev_no of disk to inspect
  * Output:
  *   @RAX - Read/Write count of disk. */
+/* 디스크의 읽기/쓰기 횟수를 테스트하기 위한 도구입니다. 이 함수는 int 0x43 및 int 0x44를 통해 호출됩니다.
+입력:
+@RDX - 검사할 디스크의 chan_no
+@RCX - 검사할 디스크의 dev_no
+출력:
+@RAX - 디스크의 읽기/쓰기 횟수 */
 void
 register_disk_inspect_intr (void) {
 	intr_register_int (0x43, 3, INTR_OFF, inspect_read_cnt, "Inspect Disk Read Count");

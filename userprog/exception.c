@@ -130,15 +130,19 @@ page_fault (struct intr_frame *f) {
 	   accessed to cause the fault.  It may point to code or to
 	   data.  It is not necessarily the address of the instruction
 	   that caused the fault (that's f->rip). */
-
+	/* 오류가 발생한 가상 주소를 얻습니다. 오류의 원인이 된 접근한 가상 주소입니다.
+	이 주소는 코드나 데이터를 가리킬 수 있습니다. 반드시 오류를 일으킨 명령어의 주소(f->rip)와는
+	동일하지 않을 수 있습니다. */
 	fault_addr = (void *) rcr2();
 
 	/* Turn interrupts back on (they were only off so that we could
 	   be assured of reading CR2 before it changed). */
+	/* 인터럽트를 다시 활성화합니다 (CR2가 변경되기 전에 읽을 수 있도록 인터럽트를 끈 상태였습니다). */
 	intr_enable ();
 
 
 	/* Determine cause. */
+	/* 원인을 결정합니다. */
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
 	user = (f->error_code & PF_U) != 0;
@@ -146,8 +150,11 @@ page_fault (struct intr_frame *f) {
 	//exit(-1);
 #ifdef VM
 	/* For project 3 and later. */
-	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
+	if (vm_try_handle_fault (f, fault_addr, user, write, not_present)){
 		return;
+	}else{
+		exit(-1);
+	}
 #endif
 
 	/* Count page faults. */

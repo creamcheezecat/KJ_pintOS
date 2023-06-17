@@ -3,6 +3,14 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "lib/kernel/bitmap.h"
+
+#define SLOT 8
+
+struct bitmap *swap_bitmap;
+size_t swap_slots;
+disk_sector_t sectors;
+
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -18,15 +26,20 @@ static const struct page_operations anon_ops = {
 	.type = VM_ANON,
 };
 
+
+
 /* Initialize the data for anonymous pages */
 /* 익명 페이지의 데이터를 초기화하세요. */
 void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
 	/* 할 일: swap_disk를 설정하세요. */
-	swap_disk = NULL;
+	// 페이지 사이즈: 4KB, 섹터 사이즈: 512 B: 8 개의 섹터 = 1 Swap slot
+    // 따라서 스왑 디스크의 섹터 개수 / 8 = Swap slot 개수
+    swap_disk = disk_get(1, 1);
+    sectors = disk_size(swap_disk);
+    swap_bitmap = bitmap_create(sectors);
 
-	
 }
 
 /* Initialize the file mapping */
@@ -38,7 +51,9 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	anon_page->offset = 0;
 
+    return true;
 
 }
 
@@ -63,5 +78,5 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-
+	
 }

@@ -79,6 +79,7 @@ hash_clear (struct hash *h, hash_action_func *destructor) {
    hash_insert(), hash_replace(), or hash_delete(), yields
    undefined behavior, whether done in DESTRUCTOR or
    elsewhere. */
+
 void
 hash_destroy (struct hash *h, hash_action_func *destructor) {
 	if (destructor != NULL)
@@ -127,7 +128,7 @@ hash_replace (struct hash *h, struct hash_elem *new) {
 /* 해시 테이블 H에서 E와 동일한 요소를 찾아 반환하거나,
 테이블에 동일한 요소가 없는 경우 널 포인터를 반환합니다. */
 struct hash_elem *
-xhash_find (struct hash *h, struct hash_elem *e) {
+hash_find (struct hash *h, struct hash_elem *e) {
 	return find_elem (h, find_bucket (h, e), e);
 }
 

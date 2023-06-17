@@ -29,18 +29,13 @@ static const struct page_operations uninit_ops = {
 /* DO NOT MODIFY this function */
 void
 uninit_new (struct page *page, void *va, vm_initializer *init,
-		enum vm_type type, void *aux,
-		bool (*initializer)(struct page *, enum vm_type, void *)) {
+	enum vm_type type, void *aux,
+	bool (*initializer)(struct page *, enum vm_type, void *)) {
 	ASSERT (page != NULL);
 
 	*page = (struct page) {
 		.operations = &uninit_ops,
 		.va = va,
-		/* 수정 한 부분 
-		.readable = false,
-		.writable = false,
-		.is_loaded = false,
-		*/
 		.frame = NULL, /* no frame for now */
 		.uninit = (struct uninit_page) {
 			.init = init,
@@ -60,7 +55,7 @@ uninit_initialize (struct page *page, void *kva) {
 	/*먼저 가져오고, page_initialize 함수가 값을 덮어쓸 수 있습니다*/
 	vm_initializer *init = uninit->init;
 	void *aux = uninit->aux;
-
+	
 	/* TODO: You may need to fix this function. */
 	return uninit->page_initializer (page, uninit->type, kva) &&
 		(init ? init (page, aux) : true);
@@ -79,6 +74,6 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
-
+	//uninit->
 
 }
