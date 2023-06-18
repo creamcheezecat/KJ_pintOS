@@ -138,9 +138,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CLOSE:
 		sc_close(f,&filesys_lock);
 		break;
-	case SYS_DUP2:
-		//f->R.rax = sc_dup2(f,&filesys_lock);
-		break;
 	default:
 		//printf("default에 들어옴\n");
 		break;
@@ -276,14 +273,36 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 	fd_check(fd);
 	ptr_check(buffer);
 
-	
+	#ifdef VM
+
+	struct page *read_page = spt_find_page(&thread_current()->spt,buffer);
+	if(read_page && !read_page->writable){
+		exit(-1);
+	}
+
+	/* uintptr_t rsp = thread_current()->rsp;
+	if(read_page->va == pg_round_down(rsp) && buffer < rsp){
+		exit(-1);
+	} */
+	/* // 진짜 중요: spt find page 에서 va 로 찾을 때 va 는 페이지 단위여야 한다.
+	struct page *read_page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
+	if (read_page == NULL || !read_page->writable){
+		exit(-1);
+	}
+
+	// 페이지가 존재하지만 스택영역 + 그중에서도 sp 보다 더 작다? 그러면 안된다!
+	void *rsp = thread_current()->rsp;
+	if (read_page->va == pg_round_down(rsp) && buffer < rsp){
+		exit(-1);
+	} */
+
+	#endif
+
 	if(fd == 0){
-		lock_acquire(filesys_lock_);
 		real_read = (int)input_getc();
-		lock_release(filesys_lock_);
 	}else if(fd == 1){
 		real_read = -1;
-	}else{// 수정이 필요함
+	}else{
 		lock_acquire(filesys_lock_);
 		real_read = (int)file_read(get_file(fd),buffer,size);
 		lock_release(filesys_lock_);
@@ -354,29 +373,6 @@ void sc_close(struct intr_frame *f, struct lock* filesys_lock_){
 	curr_file = NULL;
 	file_close(curr_file);
 	lock_release(filesys_lock_);
-}
-
-static
-int sc_dup2(struct intr_frame *f, struct lock* filesys_lock_){
-	int oldfd = f->R.rdi;
-	int newfd = f->R.rsi;
-	struct thread *curr = thread_current();
-
-	fd_check(oldfd);
-	fd_check(newfd);
-	
-	lock_acquire(filesys_lock_);
-
-	if(*(curr->fdt+ oldfd) == *(curr->fdt+ newfd)){
-		return newfd;
-	}else if(*(curr->fdt+ oldfd) == NULL){
-		return -1;
-	}
-
-	newfd = file_duplicate(oldfd);
-	
-	lock_release(filesys_lock_);
-	return newfd;
 }
 
 /* 현재 존재하는 파일을 가져올때 파일이 없다면 exit(-1) 함*/
