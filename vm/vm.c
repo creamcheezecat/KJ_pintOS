@@ -178,7 +178,7 @@ vm_get_victim (void) {
 	struct frame *target_frame = NULL;
 	while(victim == NULL){
 		struct list_elem *e;
-		
+	/* ======= 이해 필요 ======= */	
 		for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
 			target_frame = list_entry(e,struct frame,elem);
 			uint64_t *pml4 = target_frame->th->pml4;
@@ -191,6 +191,7 @@ vm_get_victim (void) {
 				break;
 			}
 		}
+	/* ======= 이해 필요 ======= */
 	}
 	return victim;
 }
@@ -266,12 +267,13 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-			
+	
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: 페이지 폴트를 유효성 검사합니다. */
 	/* TODO: Your code goes here */
+	/* ======= 이해 필요 ======= */
 	enum vm_type vmtype;
     bool stack_growth = false;
 	bool success = false;
@@ -318,7 +320,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
         success = false;
 	}
 		
-
+	/* ======= 이해 필요 ======= */
 	return vm_do_claim_page (page);
 }
 
@@ -439,10 +441,10 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 static uint64_t
 page_hash_func(const struct hash_elem *e,void *aux UNUSED){
-	struct page *page = hash_entry(e,struct page, elem);
-	return hash_bytes(&page->va,sizeof(page->va));
-	/* int *vaddr_int = (int *)hash_entry(e,struct page, elem)->va;
-	return hash_int(vaddr_int); */
+/* 	struct page *page = hash_entry(e,struct page, elem);
+	return hash_bytes(&page->va,sizeof(page->va)); */
+	int *vaddr_int = (int *)hash_entry(e,struct page, elem)->va;
+	return hash_int(vaddr_int);
 }
 //hash_bytes(&hash_entry(e,struct page, elem)->va,sizeof(hash_entry(e,struct page, elem)->va));
 

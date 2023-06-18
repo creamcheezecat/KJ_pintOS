@@ -250,7 +250,7 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
-	supplemental_page_table_init(&thread_current()->spt);// 임시?
+	supplemental_page_table_init(&thread_current()->spt);// 임시? 왜??
 
 	lock_acquire(&filesys_lock);
 	/* And then load the binary */
@@ -925,6 +925,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일로부터 세그먼트를 로드합니다. /
 	/ TODO: 이 함수는 주소 VA에 해 첫 번째 페이지 폴트가 발생할 때 호출됩니다. /
 	/ TODO: 이 함수를 호출할 때 VA는 사용 가능합니다. */
+	/* ========= 이해 필요 ========== */
 	struct file_page *fp = (struct file_page *)aux;
 	struct file *file = fp->file;
 	off_t offset = fp->offset;
@@ -938,7 +939,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 
 	memset(kpage + page_read_bytes, 0, page_zero_bytes);
-
+	/* ========= 이해 필요 ========== */
 	return true;
 }
 
@@ -994,11 +995,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		fp->zero_bytes = zero_bytes;
 		
 		void *aux = fp;
-		// 여기가 문제
+		/* ========= 이해 필요 ========== */
 		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment,aux)){
 			return false;
 		}
-
+		/* ========= 이해 필요 ========== */
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -1022,7 +1023,6 @@ setup_stack (struct intr_frame *if_) {
 	TODO: 성공하면 rsp를 적절히 설정합니다.
 	TODO: 페이지를 스택으로 표시해야 합니다.
 	TODO: 여기에 코드를 작성하세요 */
-	
 	if(vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, 1)){
 		success = vm_claim_page(stack_bottom);
 		if(success){
