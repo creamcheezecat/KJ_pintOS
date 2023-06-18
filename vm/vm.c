@@ -156,7 +156,7 @@ vm_get_victim (void) {
 	/* ======= 이해 필요 ======= */	
 		for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
 			target_frame = list_entry(e,struct frame,elem);
-			uint64_t *pml4 = target_frame->page_table;
+			uint64_t *pml4 = thread_current()->pml4;
 			void *va = target_frame->page->va;
 			if(pml4_is_accessed(pml4,va)){
 				pml4_set_accessed(pml4,va,0);
@@ -212,7 +212,6 @@ vm_get_frame (void) {
 	}
 	frame->kva = kva;
 	frame->page = NULL;
-	frame->page_table = thread_current()->pml4;
 
 	lock_acquire(&frame_lock);
 	list_push_back(&frame_list,&frame->elem);
@@ -249,61 +248,43 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: 페이지 폴트를 유효성 검사합니다. */
-	/* not_present == True: not-present page, false: writing r/o page. */
-	/* user == True: access by user, false: access by kernel. */
-	/* addr = Fault address. */
 	/* TODO: Your code goes here */
 	/* ======= 이해 필요 ======= */
 	enum vm_type vmtype;
     bool stack_growth = false;
 	bool success = false;
-
-	if(addr == NULL){
+	// 유효성 검사
+	/* addr = Fault address. */
+	if(addr == NULL || is_kernel_vaddr(addr) || !not_present){
 		return success;
 	}
-
-	if(is_kernel_vaddr(addr)){
-		return success;
-	}
-
-	if(!not_present){
-		return success;
-	}
-
 	
+	/* not_present == True: not-present page, false: writing r/o page. */
+	void *rsp = f->rsp;
+	/* user == True: access by user, false: access by kernel. */
+	if(!user){
+		rsp = thread_current()->rsp;
+	}
 
-	// addr => page addr
-	void *va = pg_round_down(addr);
-	page = spt_find_page(spt,va);
+	/* 스택 확장으로 처리해야하는 폴트일 경우*/
+	/* pintos 스택 크기를 최대 1MB 로 제한되어야 한다.*/
+
+	/* if ((USER_STACK - (1 << 20) <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK) || 
+			(USER_STACK - (1 << 20) <= rsp && rsp <= addr && addr <= USER_STACK))
+		vm_stack_growth(addr); */
+	
+	page = spt_find_page(spt,pg_round_down(addr));
 	
 	if(page == NULL){
-		// 새로운 페이지??
-	}else if(page->writable < write){
 		return success;
 	}
-
-	if (page != NULL)
-    {
-        vmtype = page_get_type(page);
-
-        switch (vmtype)
-        {
-        case VM_ANON:
-            success = vm_do_claim_page(page);
-            break;
-        case VM_FILE:
-            success = vm_do_claim_page(page);
-            break;
-
-        default:
-            break;
-        }
-    }
-    else if (stack_growth){
-        vm_stack_growth(addr);
-	}else{
-        success = false;
+	// write 불가능 페이지인데 요청 한 경우
+	if(write == true && page->writable == false){
+		return false;
 	}
+	
+	success = vm_do_claim_page(page);
+	
 		
 	/* ======= 이해 필요 ======= */
 	return success;

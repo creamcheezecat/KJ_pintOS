@@ -446,8 +446,8 @@ void thread_yield(void)
 	struct thread *curr = thread_current();
 	enum intr_level old_level;
 
-	ASSERT(!intr_context());
 
+	ASSERT(!intr_context());
 	old_level = intr_disable();
 	if (curr != idle_thread){
 		list_insert_ordered(&ready_list, &curr->elem, thread_compare_priority, 0);
