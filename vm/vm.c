@@ -117,7 +117,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	if(!he){
 		tpage = hash_entry(he ,struct page, elem);
 	} */
-	/* if(!hash_empty(&spt->pages)){
+	if(!hash_empty(&spt->pages)){
 		struct hash_iterator i;
 
 		hash_first(&i, &spt->pages);
@@ -131,9 +131,9 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 		}
 	}
 
-	return tpage; */
+	return tpage;
 	// printf("spt find page\n");
-    struct hash_elem *hm;
+  	/* struct hash_elem *hm;
     struct page *page;
     struct page tp;
     tp.va = va;
@@ -141,7 +141,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
     hm = hash_find(&spt->pages, &tp.elem);
     page = hash_entry(hm, struct page, elem);
 
-    return hm != NULL ? page : NULL;
+    return hm != NULL ? page : NULL; */
 }
 
 /* Insert PAGE into spt with validation. */
@@ -208,8 +208,6 @@ vm_evict_frame (void) {
 		return NULL;
 	}
 	// ????????
-	victim->page = NULL;
-
 	return victim;
 	
 }
@@ -230,13 +228,12 @@ vm_get_frame (void) {
 	void *kva = palloc_get_page(PAL_USER);
 	
 	if(kva == NULL){
-		PANIC("TODO");
-		frame = vm_evict_frame();
-		frame->th = thread_current();
-		return frame;
+		while(frame == NULL){// 항상 유효한 주소를 반환해야함
+			frame = vm_evict_frame();
+		}
+	}else{
+		frame = (struct frame *)malloc(sizeof(struct frame));
 	}
-
-	frame = (struct frame *)malloc(sizeof(struct frame));
 	frame->kva = kva;
 	frame->page = NULL;
 	frame->th = thread_current();

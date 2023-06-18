@@ -1,6 +1,0 @@
-#!/bin/bash
-cd vm/
-cd build/
-backtrace 0x8004217e46 0x800421c68e 0x8004208eac 0x80042092ca 0x800421bcf5 0x800421bc5c 0x800421b701 0x800421b47e 0x80042078ee
-cd ..
-cd ..
