@@ -249,6 +249,8 @@ hash_next (struct hash_iterator *i) {
 /* Returns the current element in the hash table iteration, or a
    null pointer at the end of the table.  Undefined behavior
    after calling hash_first() but before hash_next(). */
+/* 해시 테이블 반복에서 현재 요소를 반환하거나 테이블 끝에서 널 포인터를 반환합니다. 
+hash_first() 호출 이후 hash_next() 호출하기 전에 정의되지 않은 동작입니다. */
 struct hash_elem *
 hash_cur (struct hash_iterator *i) {
 	return i->elem;
@@ -316,6 +318,8 @@ find_bucket (struct hash *h, struct hash_elem *e) {
 
 /* Searches BUCKET in H for a hash element equal to E.  Returns
    it if found or a null pointer otherwise. */
+/* H에서 BUCKET에 해당하는 해시 요소를 E와 비교하여 찾습니다.
+찾으면 해당 요소를 반환하고, 찾지 못하면 널 포인터를 반환합니다. */
 static struct hash_elem *
 find_elem (struct hash *h, struct list *bucket, struct hash_elem *e) {
 	struct list_elem *i;

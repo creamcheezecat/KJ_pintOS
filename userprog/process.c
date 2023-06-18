@@ -18,7 +18,6 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
-#define VM
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -218,6 +217,7 @@ __do_fork (void *aux) {
 		}
     }
 	current->next_fd = parent->next_fd;
+
 	sema_up(&current->fork_sema);
 	/* Finally, switch to the newly created process. */
 	if (succ)
@@ -250,7 +250,8 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
-	supplemental_page_table_init(&thread_current()->spt);// 임시? 왜??
+	// hash_destroy() 호출하면 아예없어서 init을 새로 해줘야했다.
+	// supplemental_page_table_init(&thread_current()->spt);
 
 	lock_acquire(&filesys_lock);
 	/* And then load the binary */
@@ -935,6 +936,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	free(fp);
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
+		palloc_free_page(page->frame->kva);
 		return false;
 	}
 
@@ -1024,12 +1026,13 @@ setup_stack (struct intr_frame *if_) {
 	TODO: 페이지를 스택으로 표시해야 합니다.
 	TODO: 여기에 코드를 작성하세요 */
 	if(vm_alloc_page(VM_MARKER_0 | VM_ANON, stack_bottom, 1)){
+		// VM_MARKER_0: 스택이 저장된 메모리 페이지를 식별
 		success = vm_claim_page(stack_bottom);
 		if(success){
 			if_->rsp = USER_STACK;
 		}
 	}
-\
+
     return success;
 }
 

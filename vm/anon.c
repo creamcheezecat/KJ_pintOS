@@ -3,6 +3,8 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+
+#include "threads/mmu.h"
 #include "lib/kernel/bitmap.h"
 
 #define SLOT 8
@@ -78,5 +80,9 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-	
+	struct frame *p_frame = page->frame;
+	size_t offset;
+	/* if(p_frame != NULL){// frame 해제
+		pml4_clear_page()
+	} */
 }

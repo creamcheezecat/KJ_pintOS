@@ -152,7 +152,7 @@ struct thread {
 	#endif
 	#ifdef VM
 
-	
+	void *rsp;
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 	#endif

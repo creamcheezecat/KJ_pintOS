@@ -79,7 +79,7 @@ struct frame {
 	struct page *page;
 
 	struct list_elem elem;
-	struct thread * th;
+	uint64_t page_table;
 };
 
 /* The function table for page operations.

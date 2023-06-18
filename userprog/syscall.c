@@ -14,6 +14,7 @@
 #include "userprog/process.h"
 #include "include/lib/string.h"
 #include "threads/palloc.h"
+#include "vm/vm.h"
 
 static void check_address(void *);
 
@@ -88,7 +89,11 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	// TODO: 여기에 구현 작업을 수행합니다.
 	//check_address(f->R.rax);
-	
+
+	#ifdef VM
+	thread_current()->rsp = f->rsp;
+	#endif
+
 	switch (f->R.rax)
 	{
 	case SYS_HALT:
@@ -273,10 +278,12 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 
 	
 	if(fd == 0){
+		lock_acquire(filesys_lock_);
 		real_read = (int)input_getc();
+		lock_release(filesys_lock_);
 	}else if(fd == 1){
 		real_read = -1;
-	}else{
+	}else{// 수정이 필요함
 		lock_acquire(filesys_lock_);
 		real_read = (int)file_read(get_file(fd),buffer,size);
 		lock_release(filesys_lock_);
