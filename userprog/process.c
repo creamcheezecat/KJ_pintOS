@@ -361,7 +361,7 @@ process_exit (void) {
         *(curr->fdt + i) = NULL; // null 처리 해줘야 한다.
     }
 
-    palloc_free_multiple(curr->fdt,2);
+    palloc_free_page(curr->fdt);
 	
 	file_close(curr->running_file);
 	curr->running_file = NULL;
@@ -508,21 +508,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
-	/*----argument parsing-------------------------------------------------------*/
-	
-	/* char *argv[64];
-	char *token, *save_ptr;
-	int argc = 0;
- 
-	token = strtok_r(file_name, " ", &save_ptr); // 첫번째 이름
-	//token = strtok_r(file_name_total, " ", &save_ptr); // 첫번째 이름을 받아온다. save_ptr: 앞에 애 자르고 남은 문자열의 가장 맨 앞을 가리키는 포인터 주소값!
-	argv[argc] = token; //argv[0] = file_name_first
-	
-	while (token != NULL) {
-		token = strtok_r (NULL, " ", &save_ptr);
-		argc++;
-		argv[argc] = token;
-	} */
+/*----argument parsing-------------------------------------------------------*/
 	
 	// 인수 분할
 	char *argv[64],*token, *save_ptr;
@@ -885,7 +871,7 @@ lazy_load_segment (struct page *page, void *aux) {
     size_t page_read_bytes = fp->read_bytes;
     size_t page_zero_bytes = fp->zero_bytes;
 
-	free(fp);
+	free(aux);
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
 		palloc_free_page(page->frame->kva);
@@ -948,9 +934,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		fp->read_bytes = read_bytes;
 		fp->zero_bytes = zero_bytes;
 		
-		void *aux = fp;
 		/* ========= 이해 필요 ========== */
-		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment,aux)){
+		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment, fp)){
 			return false;
 		}
 		/* ========= 이해 필요 ========== */

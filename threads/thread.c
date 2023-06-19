@@ -292,7 +292,7 @@ tid_t thread_create(const char *name, int priority,
 	tid = t->tid = allocate_tid();
 
 	/* project 2 파일 디스크립터 커널 영역에 할당 */
-	t->fdt = palloc_get_multiple(PAL_ZERO,2);
+	t->fdt = palloc_get_page(PAL_ZERO);
 	if(t->fdt == NULL){
 		return TID_ERROR;
 	}

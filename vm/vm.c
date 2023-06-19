@@ -6,9 +6,8 @@
 #include "include/threads/vaddr.h"
 #include "include/threads/mmu.h"
 
-
 static struct list frame_list;
-struct lock frame_lock;
+static struct lock frame_lock;
 
 static uint64_t page_hash_func(const struct hash_elem *,void *);
 static bool page_less_func(const struct hash_elem *, const struct hash_elem *,void *);
@@ -84,10 +83,20 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		}
 
 		bool (*page_init)(struct page *, enum vm_type, void *);
-		if(VM_TYPE(type) == VM_ANON){
-			page_init = anon_initializer;
-		}else{
-			page_init = file_backed_initializer;
+
+		switch(VM_TYPE(type)){
+			case VM_UNINIT:
+				
+				break;
+			case VM_ANON:
+				page_init = anon_initializer;
+				break;
+			case VM_FILE:
+				page_init = file_backed_initializer;
+				break;
+			default:
+
+				break;
 		}
 
 		uninit_new(newpage,upage,init,type,aux,page_init);
@@ -364,33 +373,42 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		// src_page 정보
 		struct page *src_page = hash_entry(hash_cur(&i), struct page, elem);
 		enum vm_type type = src_page->operations->type;
-		void *userpage = src_page->va;
-		bool writable = src_page->writable;
-
-		// type == uninit
-		if(type == VM_UNINIT){// uninit page 생성 and 초기화
-			vm_initializer *init = src_page->uninit.init;
-			void *aux = src_page->uninit.aux;
-			vm_alloc_page_with_initializer(VM_ANON,userpage,writable,init,aux);
-			continue;
-		}
-
-		// type != uninit
-		if(!vm_alloc_page(type,userpage,writable)){
-			// init(lazy_load_segment)는 page_fault가 발생할때 호출
-			// 지금 만드는 페이지는 page_fault가 일어난 때까지 기다리지 않아도 됨
-			return false;
-		}
-
-		// vm_claim_page으로 요청해서 매핑 그리고 타입에 맞게 초기화
-		if(!vm_claim_page(userpage)){
-			return false;
-		}
-
-		// 매핑된 프레임에 내용 로딩
-		struct page *dst_page = spt_find_page(dst,userpage);
-		memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
+		void *aux = NULL;
 		
+		switch(VM_TYPE(type)){
+			case VM_UNINIT:
+				aux = src_page->uninit.aux;
+				struct file_page *fp = NULL;
+
+				if(aux != NULL){
+					struct file_page *fd = (struct file_page *)aux;
+					fp = (struct file_page *)malloc(sizeof(struct file_page));
+					fp->file = fd->file;
+					fp->offset = fd->offset;
+					fp->read_bytes = fd->read_bytes;
+					fp->zero_bytes = fd->zero_bytes;
+				}
+
+				vm_alloc_page_with_initializer(VM_ANON,
+						src_page->va,src_page->writable,src_page->uninit.init,fp);
+				break;
+			case VM_ANON:
+				// uninit page 생성 & 초기화
+				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
+					return false;
+				}
+				
+				if(!vm_claim_page(src_page->va)){
+					return false;
+				}
+
+				// 매핑된 프레임에 내용 로딩
+				struct page *dst_page = spt_find_page(dst,src_page->va);
+				memcpy(dst_page->frame->kva,src_page->frame->kva,PGSIZE);
+				break;
+			case VM_FILE:
+				break;
+		}
 	}
 	
 

@@ -276,21 +276,15 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 	#ifdef VM
 
 	struct page *read_page = spt_find_page(&thread_current()->spt,buffer);
-	if(read_page && !read_page->writable){
-		exit(-1);
-	}
-
-	/* // 진짜 중요: spt find page 에서 va 로 찾을 때 va 는 페이지 단위여야 한다.
-	struct page *read_page = spt_find_page(&thread_current()->spt, pg_round_down(buffer));
-	if (read_page == NULL || !read_page->writable){
+	if(read_page == NULL && !read_page->writable){
 		exit(-1);
 	}
 
 	// 페이지가 존재하지만 스택영역 + 그중에서도 rsp 보다 더 작다? 그러면 안된다!
-	void *rsp = thread_current()->rsp;
-	if (read_page->va == pg_round_down(rsp) && buffer < rsp){
+	uintptr_t rsp = thread_current()->rsp;
+	if(read_page->va == pg_round_down(rsp) && buffer < rsp){
 		exit(-1);
-	} */
+	}
 
 	#endif
 	
