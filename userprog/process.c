@@ -171,7 +171,6 @@ __do_fork (void *aux) {
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	/* TODO: 어떤 방식으로든 parent_if를 전달하세요. (예: process_fork()의 if_ 인자) */
 	struct intr_frame *parent_if = &parent->fork_if;/* = (struct intr_frame *)aux */
-	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	/* 1. CPU 컨텍스트를 로컬 스택으로 읽어옵니다. */
@@ -206,6 +205,7 @@ __do_fork (void *aux) {
 	TODO: 힌트) 파일 객체를 복제하려면 include/filesys/file.h에 있는 file_duplicate를 사용하세요.
 	TODO: 부모는 fork()가 성공적으로 부모의 리소스를 복제할 때까지 반환해서는 안 됩니다. */
 	process_init ();
+
 	for (int i = 2; i < 128; ++i)
     {
         struct file *fp = *(parent->fdt + i);
@@ -219,9 +219,9 @@ __do_fork (void *aux) {
 	current->next_fd = parent->next_fd;
 
 	sema_up(&current->fork_sema);
+
 	/* Finally, switch to the newly created process. */
-	if (succ)
-		do_iret (&if_);
+	do_iret (&if_);
 error:
 	sema_up(&current->fork_sema);
 	exit(-1);
@@ -354,10 +354,6 @@ process_exit (void) {
 	/* TODO: 여기에 코드를 작성하세요.
 	* TODO: 프로세스 종료 메시지를 구현하세요 (project2/process_termination.html 참조).
 	* TODO: 여기서 프로세스 리소스 정리를 구현하는 것을 권장합니다. */
-
-	if(curr->running_file){
-		file_close(curr->running_file);
-	}
 	
 	for (int i = 2; i < 128; ++i)
     {
@@ -366,7 +362,12 @@ process_exit (void) {
     }
 
     palloc_free_multiple(curr->fdt,2);
+	
+	file_close(curr->running_file);
+	curr->running_file = NULL;
+
 	process_cleanup ();
+
 	sema_up(&curr->wait_sema);
 	
 
@@ -509,18 +510,18 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/*----argument parsing-------------------------------------------------------*/
 	
-	/* char *arg_list[64];
+	/* char *argv[64];
 	char *token, *save_ptr;
-	int token_count = 0;
+	int argc = 0;
  
 	token = strtok_r(file_name, " ", &save_ptr); // 첫번째 이름
 	//token = strtok_r(file_name_total, " ", &save_ptr); // 첫번째 이름을 받아온다. save_ptr: 앞에 애 자르고 남은 문자열의 가장 맨 앞을 가리키는 포인터 주소값!
-	arg_list[token_count] = token; //arg_list[0] = file_name_first
+	argv[argc] = token; //argv[0] = file_name_first
 	
 	while (token != NULL) {
 		token = strtok_r (NULL, " ", &save_ptr);
-		token_count++;
-		arg_list[token_count] = token;
+		argc++;
+		argv[argc] = token;
 	} */
 	
 	// 인수 분할
@@ -630,7 +631,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: 코드가 여기에 옵니다.
 	 * TODO: 인수 전달을 구현합니다(project2/argument_passing.html 참조). */
 	argument_stack(argv,argc,if_);
-	//argument_passing(arg_list,token_count,if_);
+
 
 
 	success = true;
@@ -686,55 +687,6 @@ argument_stack(char ** argv,int argc ,struct intr_frame *if_){
 
 	if_->R.rdi  = argc;
 	if_->R.rsi = if_->rsp + 8; // fake_address 바로 위: arg_address 맨 앞 가리키는 주소값!
-}
-
-void
-argument_passing(char ** argv,int argc ,struct intr_frame * _if_){
-	//잘못된값 나옴
-	argv[argc] = NULL;
-	//user_stack 의 주소 = 0x47480000 = rsp 
-	//printf("rspp : %x", _if_->rsp);
-	uint8_t **rspp = &(_if_->rsp);
-	//printf("rspp : %x", **rspp);
-	int len;
-	// 인자 값 저장
-	for(int n = argc-1; n >= 0; n--){
-		//printf("argv[] : %s \n",argv[n]);
-		//문자열 뒤에 공백을 추가
-		len = strlen(argv[n]) + 1;
-		//문자열 길이 만큼 위치 이동
-		*rspp -= len;
-		//memcpy()를 통해 주소를 복사
-		memcpy(*rspp,argv[n],len);
-		//문자열의 주소 값을 저장 
-		argv[n] = *rspp;
-	}
-
-	/*단어 정렬 액세스는 정렬되지 않은 액세스보다 빠르므로 
-	최상의 성능을 위해 첫 번째 푸시 전에 스택 포인터를 <8의 배수>로 반올림합니다.*/
-	//지금 포인터 위치가 8의 배수가 아니라면 정렬한다
-	int padding = (int)*rspp % 8;
-	for(int i = 0; i < padding; i++){
-		(*rspp)--;
-		**rspp = (uint8_t)0;
-	}
-
-
-	// null for argv[argc] = 0 저장
-	*rspp -= sizeof(char *);
-	*((char **)*rspp) = (char *)0; 
-
-	// argv_addr 저장
-	*rspp -= sizeof(char *) * argc;
-	memcpy(*rspp, argv, argc * sizeof(char *));
-
-	// fake return address 저장 
-	*rspp -= sizeof(char *);
-	*((char **)*rspp) = (char *)0; 
-
-	// set %rsi -> &argv[0], %rdi -> argc
-	_if_->R.rsi = argv;
-	_if_->R.rdi = argc; 
 }
 
 /*----------------------------------------------------------------------------*/

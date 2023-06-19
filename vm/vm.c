@@ -103,20 +103,20 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
-	struct page *tpage = NULL;
+	struct page *page = NULL;
 	/* TODO: Fill this function. */
 
 	struct hash_elem *he;
 	struct page tp;
-	tp.va = va;
+	tp.va = pg_round_down(va);
 
 	he = hash_find(&spt->pages,&tp.elem);
 
 	if(he != NULL){
-		tpage = hash_entry(he ,struct page, elem);
+		page = hash_entry(he ,struct page, elem);
 	}
 
-	return tpage;
+	return page;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -138,6 +138,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	hash_delete(&spt->pages, &page->elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -150,24 +151,24 @@ vm_get_victim (void) {
 	/* TODO: The policy for eviction is up to you. */
 	/* TODO: 제거 정책은 여러분에게 달려 있습니다. */
 	/* victim = list_entry(list_pop_front(&frame_list),struct frame, elem); */
-	struct frame *target_frame = NULL;
-	while(victim == NULL){
-		struct list_elem *e;
-	/* ======= 이해 필요 ======= */	
-		for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
-			target_frame = list_entry(e,struct frame,elem);
-			uint64_t *pml4 = thread_current()->pml4;
-			void *va = target_frame->page->va;
-			if(pml4_is_accessed(pml4,va)){
-				pml4_set_accessed(pml4,va,0);
-			}else if(!pml4_is_dirty(pml4,va)){
-				victim = target_frame;
-				list_remove(e);
-				break;
-			}
-		}
-	/* ======= 이해 필요 ======= */
-	}
+	// struct frame *target_frame = NULL;
+	// while(victim == NULL){
+	// 	struct list_elem *e;
+	// /* ======= 이해 필요 ======= */	
+	// 	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
+	// 		target_frame = list_entry(e,struct frame,elem);
+	// 		uint64_t *pml4 = thread_current()->pml4;
+	// 		void *va = target_frame->page->va;
+	// 		if(pml4_is_accessed(pml4,va)){
+	// 			pml4_set_accessed(pml4,va,0);
+	// 		}else if(!pml4_is_dirty(pml4,va)){
+	// 			victim = target_frame;
+	// 			list_remove(e);
+	// 			break;
+	// 		}
+	// 	}
+	// /* ======= 이해 필요 ======= */
+	// }
 	return victim;
 }
 
@@ -204,12 +205,14 @@ vm_get_frame (void) {
 	void *kva = palloc_get_page(PAL_USER);
 	
 	if(kva == NULL){
-		while(frame == NULL){// 항상 유효한 주소를 반환해야함
+		/* while(frame == NULL){// 항상 유효한 주소를 반환해야함
 			frame = vm_evict_frame();
-		}
-	}else{
-		frame = (struct frame *)malloc(sizeof(struct frame));
+		} */
+		frame = vm_evict_frame();
+		frame->page = NULL;
+		return frame;
 	}
+	frame = (struct frame *)malloc(sizeof(struct frame));
 	frame->kva = kva;
 	frame->page = NULL;
 
@@ -227,9 +230,7 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
-	// addr => page addr
-	void *va = pg_round_down(addr);
-	vm_alloc_page(VM_ANON | VM_MARKER_0,va,true);
+	vm_alloc_page(VM_ANON | VM_MARKER_0,pg_round_down(addr),true);
 }
 
 /* Handle the fault on write_protected page */
@@ -249,17 +250,16 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: 페이지 폴트를 유효성 검사합니다. */
 	/* TODO: Your code goes here */
-	/* ======= 이해 필요 ======= */
 	enum vm_type vmtype;
     bool stack_growth = false;
 	bool success = false;
 	// 유효성 검사
 	/* addr = Fault address. */
+	/* not_present == True: not-present page, false: writing r/o page. */
 	if(addr == NULL || is_kernel_vaddr(addr) || !not_present){
 		return success;
 	}
 	
-	/* not_present == True: not-present page, false: writing r/o page. */
 	void *rsp = f->rsp;
 	/* user == True: access by user, false: access by kernel. */
 	if(!user){
@@ -268,25 +268,28 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 	/* 스택 확장으로 처리해야하는 폴트일 경우*/
 	/* pintos 스택 크기를 최대 1MB 로 제한되어야 한다.*/
-
-	/* if ((USER_STACK - (1 << 20) <= rsp - 8 && rsp - 8 == addr && addr <= USER_STACK) || 
-			(USER_STACK - (1 << 20) <= rsp && rsp <= addr && addr <= USER_STACK))
-		vm_stack_growth(addr); */
+	if ((USER_STACK - (1 << 20) <= rsp - 8 && //  반환 주소가 스택 크기 안에 있는가?
+		rsp - 8 == addr && // 폴트 주소가 현재 스택 프레임의 반환 주소인가?
+		addr <= USER_STACK) || // 폴트 주소가 유저 스택 안에 있는가?
+		// 스택 포인터 가 폴트 주소와 유저 스택 사이에 있는가?
+		(USER_STACK - (1 << 20) <= rsp && rsp <= addr &&
+		addr <= USER_STACK)) // 폴트 주소가 유저 스택 안에 있는가?
+	{
+		vm_stack_growth(addr);
+	}
 	
-	page = spt_find_page(spt,pg_round_down(addr));
+	page = spt_find_page(spt,addr);
 	
 	if(page == NULL){
 		return success;
 	}
 	// write 불가능 페이지인데 요청 한 경우
 	if(write == true && page->writable == false){
-		return false;
+		return success;
 	}
 	
 	success = vm_do_claim_page(page);
 	
-		
-	/* ======= 이해 필요 ======= */
 	return success;
 }
 
@@ -355,7 +358,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	// TODO: src의 각 페이지를 순회하고 dst에 해당 entry의 사본을 만듭니다.
 	// TODO: uninit page를 할당하고 그것을 즉시 claim해야 합니다.
     struct hash_iterator i;
-	
+
 	hash_first(&i, &src->pages);
 	while(hash_next(&i)){
 		// src_page 정보
