@@ -252,9 +252,10 @@ int sc_filesize(struct intr_frame *f, struct lock* filesys_lock_){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
+	struct file *cur_file = get_file(fd);
 
 	lock_acquire(filesys_lock_);
-	int success = file_length(get_file(fd));
+	int success = file_length(cur_file);
 	lock_release(filesys_lock_);
 
 	return success;
@@ -269,29 +270,21 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 	
 	fd_check(fd);
 	ptr_check(buffer);
-
-	#ifdef VM
-
-	struct page *read_page = spt_find_page(&thread_current()->spt,buffer);
-	if(read_page == NULL && !read_page->writable){
-		exit(-1);
-	}
-
-	// 페이지가 존재하지만 스택영역 + 그중에서도 rsp 보다 더 작다? 그러면 안된다!
-	uintptr_t rsp = thread_current()->rsp;
-	if(read_page->va == pg_round_down(rsp) && buffer < rsp){
-		exit(-1);
-	}
-
-	#endif
 	
 	if(fd == 0){
 		real_read = (int)input_getc();
 	}else if(fd == 1){
 		real_read = -1;
 	}else{
+		struct file *cur_file = get_file(fd);
+		#ifdef VM
+		struct page *read_page = spt_find_page(&thread_current()->spt, buffer);
+		if(read_page && !read_page->writable){
+			exit(-1);
+		}
+		#endif
 		lock_acquire(filesys_lock_);
-		real_read = (int)file_read(get_file(fd),buffer,size);
+		real_read = (int)file_read(cur_file,buffer,size);
 		lock_release(filesys_lock_);
 	}
 	
@@ -314,8 +307,9 @@ int sc_write(struct intr_frame *f, struct lock* filesys_lock_){
 		putbuf(buffer,size);
 		real_write = (int)size;
 	}else{
+		struct file *cur_file = get_file(fd);
 		lock_acquire(filesys_lock_);
-		real_write = (int)file_write(get_file(fd),buffer,size);
+		real_write = (int)file_write(cur_file,buffer,size);
 		lock_release(filesys_lock_);
 	}
 	//printf("name : %s, fd : %d , real_write : %d\n",thread_current()->name,fd,real_write);
@@ -328,9 +322,10 @@ void sc_seek(struct intr_frame *f, struct lock* filesys_lock_){
 	unsigned position = (unsigned)f->R.rsi;
 
 	fd_check(fd);
+	struct file *cur_file = get_file(fd);
 
 	lock_acquire(filesys_lock_);
-	file_seek(get_file(fd),position);
+	file_seek(cur_file,position);
 	lock_release(filesys_lock_);
 }
 
@@ -339,9 +334,10 @@ unsigned sc_tell(struct intr_frame *f, struct lock* filesys_lock_){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
+	struct file *cur_file = get_file(fd);
 
 	lock_acquire(filesys_lock_);
-	unsigned success = (unsigned)file_tell(get_file(fd));
+	unsigned success = (unsigned)file_tell(cur_file);
 	lock_release(filesys_lock_);
 
 	return success;
@@ -352,12 +348,11 @@ void sc_close(struct intr_frame *f, struct lock* filesys_lock_){
 	int fd = f->R.rdi;
 	
 	fd_check(fd);
-	
+	struct file *cur_file = get_file(fd);
+
 	lock_acquire(filesys_lock_);
-	struct file *curr_file = get_file(fd);
-	
-	curr_file = NULL;
-	file_close(curr_file);
+	cur_file = NULL;
+	file_close(cur_file);
 	lock_release(filesys_lock_);
 }
 
@@ -372,17 +367,12 @@ void *sc_mmap(struct intr_frame *f, struct lock* filesys_lock_){
 
 	ptr_check(addr);
 	fd_check(fd);
-
+	struct file *cur_file = get_file(fd);
 	/* 실패 할때 NULL 반환 */
 	lock_acquire(filesys_lock_);
-	struct file *mmap_file = get_file(fd);
-	// 파일이 없다면 실패
-	if(mmap_file == NULL){
-		lock_release(filesys_lock_);
-		return succ;
-	}
+
 	// fd로 열린 파일의 길이가 0 바이트 면 호출 실패
-	if(file_length(mmap_file) == 0){
+	if(file_length(cur_file) == 0){
 		lock_release(filesys_lock_);
 		return succ;
 	}
@@ -408,7 +398,7 @@ void *sc_mmap(struct intr_frame *f, struct lock* filesys_lock_){
 	}
 
 	lock_acquire(filesys_lock_);
-	succ = do_mmap(addr,length,writable,mmap_file,offset);
+	succ = do_mmap(addr,length,writable,cur_file,offset);
 	lock_release(filesys_lock_);
 
 	return succ;
@@ -434,7 +424,7 @@ struct file *get_file(int fd){
 	struct thread *curr = thread_current();
 
 	if(*(curr->fdt + fd) == NULL){
-		return -1;
+		exit(-1);
 	}
 	
 	return *(curr->fdt + fd);
