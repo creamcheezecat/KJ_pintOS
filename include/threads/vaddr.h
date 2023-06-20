@@ -26,6 +26,7 @@
 #define pg_no(va) ((uint64_t) (va) >> PGBITS)
 
 /* Round up to nearest page boundary. */
+/* 가장 가까운 페이지 경계로 올림 처리합니다. */
 #define pg_round_up(va) ((void *) (((uint64_t) (va) + PGSIZE - 1) & ~PGMASK))
 
 /* Round down to nearest page boundary. */

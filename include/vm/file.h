@@ -13,6 +13,13 @@ struct file_page {
 	size_t zero_bytes;					/* 0으로 채울 남은 페이지의 바이트 */
 };
 
+struct mmap_file {
+	void *va;
+	struct list_elem elem;
+	struct list file_mapping_list;
+
+};
+
 void vm_file_init (void);
 bool file_backed_initializer (struct page *page, enum vm_type type, void *kva);
 void *do_mmap(void *addr, size_t length, int writable,

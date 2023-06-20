@@ -377,6 +377,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		
 		switch(VM_TYPE(type)){
 			case VM_UNINIT:
+				// anon 으로 초기화 할당하는 이유
+				/* 데이터 보전, 일관성 유지 및 메모리 사용량 최적화 */
 				aux = src_page->uninit.aux;
 				struct file_page *fp = NULL;
 
@@ -393,7 +395,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 						src_page->va,src_page->writable,src_page->uninit.init,fp);
 				break;
 			case VM_ANON:
-				// uninit page 생성 & 초기화
+				// uninit page 생성 & 초기화 이유
+				/* 페이지 복사 작업의 효율성과 메모리 사용량을 관리 */
 				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
 					return false;
 				}

@@ -16,8 +16,6 @@
 #include "threads/palloc.h"
 #include "vm/vm.h"
 
-static void check_address(void *);
-
 static void sc_exit(struct intr_frame *);
 static int sc_fork(struct intr_frame *);
 static int sc_exec(struct intr_frame *);
@@ -32,6 +30,8 @@ static void sc_seek(struct intr_frame *,struct lock*);
 static unsigned sc_tell(struct intr_frame *,struct lock*);
 static void sc_close(struct intr_frame *,struct lock*);
 static int sc_dup2(struct intr_frame *, struct lock*);
+static void *sc_mmap(struct intr_frame *f, struct lock*);
+static void sc_munmap(struct intr_frame *f);
 
 static struct file *get_file(int);
 static void ptr_check (void *ptr);
@@ -88,7 +88,6 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	//printf("syscall_handler 진입\n");
 	// TODO: Your implementation goes here.
 	// TODO: 여기에 구현 작업을 수행합니다.
-	//check_address(f->R.rax);
 
 	#ifdef VM
 	thread_current()->rsp = f->rsp;
@@ -138,19 +137,17 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CLOSE:
 		sc_close(f,&filesys_lock);
 		break;
+	case SYS_MMAP:
+		f->R.rax = sc_mmap(f,&filesys_lock);
+		break;
+	case SYS_MUNMAP:
+		sc_munmap(f);
+		break;
 	default:
 		//printf("default에 들어옴\n");
 		break;
 	}
 	//printf("여기에 오는건 맞아?\n");
-}
-
-static
-void check_address(void *addr){
-	struct thread *cur = thread_current();
-	if(addr == NULL || is_kernel_vaddr(addr) || pml4_get_page(cur->pml4, addr) == NULL){ // 유저 스택 밖에 있다면 종료
-		exit(-1);
-	}
 }
 
 static
@@ -364,6 +361,73 @@ void sc_close(struct intr_frame *f, struct lock* filesys_lock_){
 	lock_release(filesys_lock_);
 }
 
+static
+void *sc_mmap(struct intr_frame *f, struct lock* filesys_lock_){
+	void *addr = (void *)f->R.rdi;
+	size_t length = (size_t)f->R.rsi;
+	int writable = f->R.rdx;
+	int fd = f->R.r10;
+	off_t offset = (off_t)f->R.r8;
+	void *succ = NULL;
+
+	ptr_check(addr);
+	fd_check(fd);
+
+	/* 실패 할때 NULL 반환 */
+	lock_acquire(filesys_lock_);
+	struct file *mmap_file = get_file(fd);
+	// 파일이 없다면 실패
+	if(mmap_file == NULL){
+		lock_release(filesys_lock_);
+		return succ;
+	}
+	// fd로 열린 파일의 길이가 0 바이트 면 호출 실패
+	if(file_length(mmap_file) == 0){
+		lock_release(filesys_lock_);
+		return succ;
+	}
+	lock_release(filesys_lock_);
+	
+	/* 매핑된 페이지 범위가 실행 가능한 로드시간에 매핑된 스택 또는 
+	페이지 포함하여 기존 매핑된 페이지 집합과 겹치는 경우 실패 ?? */
+	if(!is_user_vaddr(addr +length)){
+		return succ;
+	}
+
+	//addr 이 NULL 인 경우 실패 or addr이 페이지 정렬 안되면 실패 or length 이 0 일때도 실패 
+	if(addr == NULL || (uint64_t)addr & PGSIZE != 0 ||(int)length <= 0){
+		return succ;
+	}
+	//콘솔 입력 및 출력 파일 설명자는 매핑 할수 없다
+	if(fd == 0 || fd == 1){
+		return succ;
+	}
+
+	if(offset > length){
+		return succ;
+	}
+
+	lock_acquire(filesys_lock_);
+	succ = do_mmap(addr,length,writable,mmap_file,offset);
+	lock_release(filesys_lock_);
+
+	return succ;
+
+}
+
+static
+void sc_munmap(struct intr_frame *f){
+	void *addr = (void *)f->R.rdi;
+
+	ptr_check(addr);
+
+	// addr이 페이지 정렬 안되면 실패
+	if((uint64_t)addr % PGSIZE != 0){
+		exit(-1);
+	}
+
+	do_munmap(addr);
+}
 /* 현재 존재하는 파일을 가져올때 파일이 없다면 exit(-1) 함*/
 static
 struct file *get_file(int fd){

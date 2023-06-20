@@ -931,8 +931,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		fp->file = file;
 		fp->offset = ofs;
-		fp->read_bytes = read_bytes;
-		fp->zero_bytes = zero_bytes;
+		fp->read_bytes = page_read_bytes;
+		fp->zero_bytes = page_zero_bytes;
 		
 		/* ========= 이해 필요 ========== */
 		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment, fp)){
