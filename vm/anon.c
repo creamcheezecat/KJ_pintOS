@@ -9,7 +9,7 @@
 
 #define SLOT 8
 
-struct bitmap *swap_bitmap;
+
 size_t swap_slots;
 disk_sector_t sectors;
 
@@ -40,7 +40,7 @@ vm_anon_init (void) {
     // 따라서 스왑 디스크의 섹터 개수 / 8 = Swap slot 개수
     swap_disk = disk_get(1, 1);
     sectors = disk_size(swap_disk);
-    swap_bitmap = bitmap_create(sectors);
+
 
 }
 
@@ -82,6 +82,7 @@ anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	struct frame *p_frame = page->frame;
 	size_t offset;
+	//printf("여기오나\n");
 	/* if(p_frame != NULL){// frame 해제
 		pml4_clear_page()
 	} */

@@ -864,7 +864,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: 파일로부터 세그먼트를 로드합니다. /
 	/ TODO: 이 함수는 주소 VA에 해 첫 번째 페이지 폴트가 발생할 때 호출됩니다. /
 	/ TODO: 이 함수를 호출할 때 VA는 사용 가능합니다. */
-	/* ========= 이해 필요 ========== */
+
 	struct file_page *fp = (struct file_page *)aux;
 	struct file *file = fp->file;
 	off_t offset = fp->offset;
@@ -879,7 +879,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 
 	memset(kpage + page_read_bytes, 0, page_zero_bytes);
-	/* ========= 이해 필요 ========== */
+
 	return true;
 }
 
@@ -934,11 +934,11 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		fp->read_bytes = page_read_bytes;
 		fp->zero_bytes = page_zero_bytes;
 		
-		/* ========= 이해 필요 ========== */
+
 		if(!vm_alloc_page_with_initializer(VM_ANON,upage,writable,lazy_load_segment, fp)){
 			return false;
 		}
-		/* ========= 이해 필요 ========== */
+
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;

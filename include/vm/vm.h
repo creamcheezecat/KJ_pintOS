@@ -58,7 +58,7 @@ struct page {
 	struct hash_elem elem;
 
 	bool writable;
-	
+	int mapped_page_count;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	/* 각 유형의 데이터가 union에 바인딩됩니다.
