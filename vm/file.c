@@ -3,6 +3,7 @@
 #include "vm/vm.h"
 
 #include "include/threads/vaddr.h"
+#include "include/threads/mmu.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -44,15 +45,42 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 }
 
 /* Swap in the page by read contents from the file. */
+/* 파일에서 내용을 읽어 페이지를 스왑인합니다. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
-}
+	//printf("file_backed_swap_in 진입\n");
+	size_t page_read_bytes = file_page->read_bytes;
+    size_t page_zero_bytes = file_page->zero_bytes;
 
+
+	if(file_read_at(file_page->file, kva, page_read_bytes, file_page->offset) != (int)page_read_bytes){
+		return false;
+	}
+
+	memset(kva + page_read_bytes, 0, page_zero_bytes);
+	return true;
+}
 /* Swap out the page by writeback contents to the file. */
+/* 페이지의 내용을 파일로 기록하여 페이지를 스왑아웃합니다. */
+/*내용을 다시 파일에 기록하여 페이지를 교체합니다. 
+페이지가 더러운지 먼저 확인하는 것이 좋습니다. 
+더럽지 않으면 파일의 내용을 수정할 필요가 없습니다. 
+페이지를 교체한 후에는 페이지의 더티 비트를 꺼야 합니다.*/
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	//printf("file_backed_swap_out 진입\n");
+	if (pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+		//printf("파일 변경 됐으니까 바꿔줘야지\n");
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+		pml4_set_dirty(thread_current()->pml4, page->va, 0);
+	}
+	page->frame->page = NULL;
+	page->frame = NULL;
+	return true;
+
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -61,12 +89,17 @@ static void
 file_backed_destroy (struct page *page) {
 	
 	// page struct를 해제할 필요는 없습니다. (file_backed_destroy의 호출자가 해야 함)
-	//printf("file_backed_destroy 오는거 맞아 ?");
+	// printf("file_backed_destroy 오는거 맞아 ?");
 	struct file_page *file_page UNUSED = &page->file;
-
+	//printf("read_bytes %lld , offset %lld\n",page->file.read_bytes,page->file.offset);
+	//printf("read_bytes %lld , offset %lld\n",file_page->read_bytes,file_page->offset);
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+		//printf("파일 변경 됐으니까 바꿔줘야지\n");
+		if(file_write_at(file_page->file, page->va, 
+				file_page->read_bytes, file_page->offset) <= 0){
+				//printf("쓰인게 없다는데 맞아?\n");
+		}
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
@@ -138,14 +171,14 @@ do_munmap (void *addr) {
 	*/
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *unmap_page =  spt_find_page(spt, addr);
-	//printf("진입한거 확실한거지??\n");
+	//printf("ummap 진입한거 확실한거지??\n");
 	int page_count = unmap_page->mapped_page_count;
 	for (int i = 0 ; i < page_count ; i++){
 		//printf("여기몇번오나??\n");
 		if(unmap_page){
 			//printf("unmap_page 삭제\n");
 			destroy(unmap_page);
-			spt_remove_page(spt, unmap_page);
+			//spt_remove_page(spt, unmap_page);
 		}
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);

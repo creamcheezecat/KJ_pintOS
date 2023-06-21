@@ -16,6 +16,14 @@
    If bit 0 in an element represents bit K in the bitmap,
    then bit 1 in the element represents bit K+1 in the bitmap,
    and so on. */
+/* 요소 유형.
+
+이는 int와 같거나 그보다 넓은 범위의 부호 없는 정수 유형이어야 합니다.
+
+각 비트는 비트맵에서 하나의 비트를 나타냅니다.
+요소 내의 비트 0이 비트맵의 비트 K를 나타내면,
+요소 내의 비트 1은 비트맵의 비트 K+1을 나타내고,
+이와 같이 진행됩니다. */
 typedef unsigned long elem_type;
 
 /* Number of bits in an element. */
@@ -165,6 +173,9 @@ bitmap_reset (struct bitmap *b, size_t bit_idx) {
 /* Atomically toggles the bit numbered IDX in B;
    that is, if it is true, makes it false,
    and if it is false, makes it true. */
+/* B의 IDX 번째 비트를 원자적으로 토글합니다.
+즉, 비트가 true인 경우 false로 만들고,
+비트가 false인 경우 true로 만듭니다. */
 void
 bitmap_flip (struct bitmap *b, size_t bit_idx) {
 	size_t idx = elem_idx (bit_idx);
@@ -267,6 +278,10 @@ bitmap_all (const struct bitmap *b, size_t start, size_t cnt) {
    consecutive bits in B at or after START that are all set to
    VALUE.
    If there is no such group, returns BITMAP_ERROR. */
+/* B에서 START 이후 또는 같은 위치에서 시작하여
+CNT 개의 연속된 비트 그룹을 찾고, 그룹 내 모든 비트가 VALUE로 설정된 경우
+그룹의 시작 인덱스를 찾아 반환합니다.
+이러한 그룹이 없는 경우 BITMAP_ERROR를 반환합니다. */
 size_t
 bitmap_scan (const struct bitmap *b, size_t start, size_t cnt, bool value) {
 	ASSERT (b != NULL);
@@ -289,6 +304,12 @@ bitmap_scan (const struct bitmap *b, size_t start, size_t cnt, bool value) {
    If CNT is zero, returns 0.
    Bits are set atomically, but testing bits is not atomic with
    setting them. */
+/* B에서 START 이후 또는 같은 위치에서 시작하여
+CNT 개의 연속된 비트 그룹을 찾아서 모두 VALUE로 설정된 경우
+그 모든 비트를 !VALUE로 뒤집고, 그룹 내 첫 번째 비트의 인덱스를 반환합니다.
+이러한 그룹이 없는 경우 BITMAP_ERROR를 반환합니다.
+CNT가 0인 경우 0을 반환합니다.
+비트는 원자적으로 설정되지만, 비트 테스트는 설정과 원자적으로 이루어지지 않습니다. */
 size_t
 bitmap_scan_and_flip (struct bitmap *b, size_t start, size_t cnt, bool value) {
 	size_t idx = bitmap_scan (b, start, cnt, value);

@@ -78,10 +78,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		struct page *newpage = (struct page *)malloc(sizeof(struct page));
 
-		if(newpage == NULL){
-			goto err;
-		}
-
 		bool (*page_init)(struct page *, enum vm_type, void *);
 
 		switch(VM_TYPE(type)){
@@ -146,7 +142,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	hash_delete(&spt->pages, &page->elem);
+	//hash_delete(&spt->pages, &page->elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -159,24 +155,24 @@ vm_get_victim (void) {
 	/* TODO: The policy for eviction is up to you. */
 	/* TODO: 제거 정책은 여러분에게 달려 있습니다. */
 	/* victim = list_entry(list_pop_front(&frame_list),struct frame, elem); */
-	// struct frame *target_frame = NULL;
-	// while(victim == NULL){
-	// 	struct list_elem *e;
-	// /* ======= 이해 필요 ======= */	
-	// 	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
-	// 		target_frame = list_entry(e,struct frame,elem);
-	// 		uint64_t *pml4 = thread_current()->pml4;
-	// 		void *va = target_frame->page->va;
-	// 		if(pml4_is_accessed(pml4,va)){
-	// 			pml4_set_accessed(pml4,va,0);
-	// 		}else if(!pml4_is_dirty(pml4,va)){
-	// 			victim = target_frame;
-	// 			list_remove(e);
-	// 			break;
-	// 		}
-	// 	}
-	// /* ======= 이해 필요 ======= */
-	// }
+	struct list_elem *e;
+	lock_acquire(&frame_lock);
+	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
+
+		victim = list_entry(e,struct frame,elem);
+		uint64_t *pml4 = thread_current()->pml4;
+
+		if(victim->page == NULL){
+			break;
+		}
+
+		if(pml4_is_accessed(pml4,victim->page->va)){
+			pml4_set_accessed(pml4,victim->page->va,0);
+		}else{
+			break;
+		}
+	}
+	lock_release(&frame_lock);
 	return victim;
 }
 
@@ -189,10 +185,10 @@ vm_evict_frame (void) {
 	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 	/* TODO: 희생자를 교체하고 제거된 프레임을 반환합니다. */
-	if(victim == NULL){
-		return NULL;
+	if (victim->page != NULL){
+		// 어디로 가는거냐고
+        swap_out(victim->page);
 	}
-	// ????????
 	return victim;
 	
 }
@@ -208,15 +204,17 @@ vm_evict_frame (void) {
 이 함수는 사용 가능한 메모리 공간을 얻기 위해 프레임을 대체합니다. */
 static struct frame *
 vm_get_frame (void) {
+	// printf("get_frame 진입\n");
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	void *kva = palloc_get_page(PAL_USER);
+	void *kva = palloc_get_page(PAL_USER | PAL_ZERO);
 	
 	if(kva == NULL){
 		/* while(frame == NULL){// 항상 유효한 주소를 반환해야함
 			frame = vm_evict_frame();
 		} */
 		frame = vm_evict_frame();
+		memset(frame->kva, 0, PGSIZE);
 		frame->page = NULL;
 		return frame;
 	}
@@ -377,7 +375,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		
 		switch(VM_TYPE(type)){
 			case VM_UNINIT:
-				//uninit 타입
+				//uninit 타입은 본래 타입으로 할당해야한다? 
 				aux = src_page->uninit.aux;
 				type = page_get_type(src_page);
 				struct file_page *fp = NULL;
@@ -385,7 +383,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				if(aux != NULL){
 					struct file_page *fd = (struct file_page *)aux;
 					fp = (struct file_page *)malloc(sizeof(struct file_page));
-					if(type == VM_FILE){
+					if(VM_TYPE(type) == VM_FILE){
 						fp->file = file_reopen(fd->file);
 					}else{
 						fp->file = fd->file;
@@ -412,6 +410,20 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				memcpy(dst_page->frame->kva,src_page->frame->kva,PGSIZE);
 				break;
 			case VM_FILE:
+				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
+					return false;
+				}
+				
+				if(!vm_claim_page(src_page->va)){
+					return false;
+				}
+
+				dst_page = spt_find_page(dst, src_page->va);
+				dst_page->file.file = file_reopen(src_page->file.file);
+				dst_page->file.offset = src_page->file.offset;
+				dst_page->file.read_bytes = src_page->file.read_bytes;
+				dst_page->file.zero_bytes = src_page->file.zero_bytes;
+				memcpy(dst_page->va,src_page->frame->kva,PGSIZE);
 				break;
 		}
 	}
@@ -439,6 +451,15 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	*/
 }
 /*================================================*/
+
+void 
+vm_free_frame(struct frame *frame)
+{
+    lock_acquire(&frame_lock);
+    list_remove(&frame->elem);
+    lock_release(&frame_lock);
+    free(frame);
+}
 
 static uint64_t
 page_hash_func(const struct hash_elem *e,void *aux UNUSED){

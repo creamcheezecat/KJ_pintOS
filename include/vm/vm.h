@@ -141,4 +141,6 @@ void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
 
+void vm_free_frame(struct frame *frame);
+
 #endif  /* VM_VM_H */
