@@ -92,6 +92,14 @@ file_backed_destroy (struct page *page) {
 	// page struct를 해제할 필요는 없습니다. (file_backed_destroy의 호출자가 해야 함)
 	// printf("file_backed_destroy 오는거 맞아 ?");
 	struct file_page *file_page UNUSED = &page->file;
+/* 	struct frame *frame = page->frame;
+
+    if (frame != NULL)
+    {
+        vm_free_frame(frame);
+    } */
+
+
 	//printf("read_bytes %lld , offset %lld\n",page->file.read_bytes,page->file.offset);
 	//printf("read_bytes %lld , offset %lld\n",file_page->read_bytes,file_page->offset);
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
@@ -179,8 +187,8 @@ do_munmap (void *addr) {
 		if(unmap_page){
 			//printf("unmap_page 삭제\n");
 			destroy(unmap_page);
-			printf("unmap_page destory 갔다옴\n");
-			spt_remove_page(spt, unmap_page);
+			/* printf("unmap_page destory 갔다옴\n");
+			spt_remove_page(spt, unmap_page); */
 		}
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);
@@ -191,8 +199,6 @@ static bool
 lazy_load_segment (struct page *page, void *aux) {
 	ASSERT(page->frame != NULL);
     ASSERT(aux != NULL);
-	
-	void *kpage = page->frame->kva;
 
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
@@ -209,8 +215,17 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	free(aux);
 
+	page->file = (struct file_page){
+        .file = file,
+        .offset = offset,
+        .read_bytes = page_read_bytes,
+        .zero_bytes = page_zero_bytes
+    };
+
+	void *kpage = page->frame->kva;
+
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
-		palloc_free_page(page->frame->kva);
+		palloc_free_page(page);
 		return false;
 	}
 
