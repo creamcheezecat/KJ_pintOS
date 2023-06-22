@@ -380,7 +380,7 @@ void *sc_mmap(struct intr_frame *f){
 	}
 
 	//addr 이 NULL 인 경우 실패 or addr이 페이지 정렬 안되면 실패  
-	if(addr == NULL || ((uint64_t)addr & PGSIZE) != 0){
+	if(addr == NULL || ((uint64_t)addr % PGSIZE) != 0){
 		return succ;
 	}
 
@@ -399,7 +399,7 @@ void *sc_mmap(struct intr_frame *f){
 	if(offset > length){
 		return succ;
 	}
-
+	
 	return do_mmap(addr,length,writable,cur_file,offset);
 
 }

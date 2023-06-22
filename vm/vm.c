@@ -142,7 +142,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	//hash_delete(&spt->pages, &page->elem);
+	hash_delete(&spt->pages, &page->elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -410,7 +410,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				memcpy(dst_page->frame->kva,src_page->frame->kva,PGSIZE);
 				break;
 			case VM_FILE:
-				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
+				/* if(!vm_alloc_page(type,src_page->va,src_page->writable)){
 					return false;
 				}
 				
@@ -423,7 +423,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				dst_page->file.offset = src_page->file.offset;
 				dst_page->file.read_bytes = src_page->file.read_bytes;
 				dst_page->file.zero_bytes = src_page->file.zero_bytes;
-				memcpy(dst_page->va,src_page->frame->kva,PGSIZE);
+				memcpy(dst_page->va,src_page->frame->kva,PGSIZE); */
 				break;
 		}
 	}

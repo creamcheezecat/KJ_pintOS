@@ -79,6 +79,7 @@ file_backed_swap_out (struct page *page) {
 	}
 	page->frame->page = NULL;
 	page->frame = NULL;
+	pml4_clear_page(thread_current()->pml4, page->va);
 	return true;
 
 }
@@ -178,7 +179,8 @@ do_munmap (void *addr) {
 		if(unmap_page){
 			//printf("unmap_page 삭제\n");
 			destroy(unmap_page);
-			//spt_remove_page(spt, unmap_page);
+			printf("unmap_page destory 갔다옴\n");
+			spt_remove_page(spt, unmap_page);
 		}
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);
