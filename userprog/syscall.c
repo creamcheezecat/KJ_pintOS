@@ -18,7 +18,7 @@
 
 static void sc_exit(struct intr_frame *);
 static int sc_fork(struct intr_frame *);
-static int sc_exec(struct intr_frame *);
+static void sc_exec(struct intr_frame *);
 static int sc_wait(struct intr_frame *);
 static bool sc_create(struct intr_frame *,struct lock*);
 static bool sc_remove(struct intr_frame *,struct lock*);
@@ -107,7 +107,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = sc_fork(f);
 		break;
 	case SYS_EXEC:
-		f->R.rax = sc_exec(f);
+		sc_exec(f);
 		break;
 	case SYS_WAIT:
 		f->R.rax = sc_wait(f);
@@ -179,9 +179,8 @@ int sc_fork(struct intr_frame *f){
 }
 
 static
-int sc_exec(struct intr_frame *f){
+void sc_exec(struct intr_frame *f){
 	char * file = (char *)f->R.rdi;
-	int success = 0;
 	ptr_check(file);
 
 	char * cmd_line = palloc_get_page (0);
@@ -189,10 +188,8 @@ int sc_exec(struct intr_frame *f){
 		exit(-1);
 	}
 	strlcpy (cmd_line, file, PGSIZE);
-	if(success = process_exec(cmd_line) < 0){
-		exit(-1);
-	}
-	return success;
+	process_exec(cmd_line);
+	exit(-1);
 }
 
 static
@@ -277,6 +274,7 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 	ptr_check(buffer);
 	
 	if(fd == 0){
+		lock_acquire(filesys_lock_);
 		real_read = (int)input_getc();
 	}else if(fd == 1){
 		real_read = -1;

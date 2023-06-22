@@ -41,7 +41,7 @@ vm_anon_init (void) {
 	// 페이지 사이즈: 4KB, 섹터 사이즈: 512 B: 8 개의 섹터 = 1 Swap slot
     // 따라서 스왑 디스크의 섹터 개수 / 8 = Swap slot 개수
     swap_disk = disk_get(1, 1);
-    sectors = disk_size(swap_disk);
+    sectors = disk_size(swap_disk) / SLOT;
  	swap_bitmap = bitmap_create(sectors);
 
 }

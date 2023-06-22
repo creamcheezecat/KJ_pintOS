@@ -99,8 +99,9 @@ process_fork (const char *name, struct intr_frame *if_) {
 	/* Clone current thread to new thread.*/
 	// do_fork에 전달할때 thread_current()안에 if_ 를 저장해서 같이 전달한다.
 	memcpy(&thread_current()->fork_if, if_,sizeof(struct intr_frame));
-	return thread_create (name,
+	tid_t f_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
+	return f_tid;
 }
 
 #ifndef VM
@@ -216,7 +217,7 @@ __do_fork (void *aux) {
 			*(current->fdt + i) = NULL;
 		}
     }
-	current->next_fd = parent->next_fd;
+	//current->next_fd = parent->next_fd;
 
 	sema_up(&current->fork_sema);
 

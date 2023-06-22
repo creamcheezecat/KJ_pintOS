@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "include/lib/kernel/hash.h"
 #include "include/lib/string.h"
+#include "threads/synch.h"
 
 enum vm_type {
 	/* page not initialized */

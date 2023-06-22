@@ -74,7 +74,9 @@ file_backed_swap_out (struct page *page) {
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
 		//printf("파일 변경 됐으니까 바꿔줘야지\n");
-		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+		if(file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset) <= 0){
+			//PANIC("File_Write_Anything !!!!! in file_backed_swap_out");
+		}
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	page->frame->page = NULL;
@@ -92,14 +94,6 @@ file_backed_destroy (struct page *page) {
 	// page struct를 해제할 필요는 없습니다. (file_backed_destroy의 호출자가 해야 함)
 	// printf("file_backed_destroy 오는거 맞아 ?");
 	struct file_page *file_page UNUSED = &page->file;
-/* 	struct frame *frame = page->frame;
-
-    if (frame != NULL)
-    {
-        vm_free_frame(frame);
-    } */
-
-
 	//printf("read_bytes %lld , offset %lld\n",page->file.read_bytes,page->file.offset);
 	//printf("read_bytes %lld , offset %lld\n",file_page->read_bytes,file_page->offset);
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
@@ -107,6 +101,7 @@ file_backed_destroy (struct page *page) {
 		//printf("파일 변경 됐으니까 바꿔줘야지\n");
 		if(file_write_at(file_page->file, page->va, 
 				file_page->read_bytes, file_page->offset) <= 0){
+				//PANIC("File_Write_Anything !!!!! in file_becked_destory");
 				//printf("쓰인게 없다는데 맞아?\n");
 		}
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
@@ -140,7 +135,7 @@ do_mmap (void *addr, size_t length, int writable,
 
 		struct file_page *fp = (struct file_page *)malloc(sizeof(struct file_page));
 
-		fp->file = file;
+		fp->file = fr;
 		fp->offset = offset;
 		fp->read_bytes = page_read_bytes;
 		fp->zero_bytes = page_zero_bytes;
@@ -187,8 +182,8 @@ do_munmap (void *addr) {
 		if(unmap_page){
 			//printf("unmap_page 삭제\n");
 			destroy(unmap_page);
-			/* printf("unmap_page destory 갔다옴\n");
-			spt_remove_page(spt, unmap_page); */
+			//printf("unmap_page destory 갔다옴\n");
+			//spt_remove_page(spt, unmap_page);
 		}
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);
@@ -225,7 +220,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	void *kpage = page->frame->kva;
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
-		palloc_free_page(page);
+		vm_dealloc_page(page);
 		return false;
 	}
 

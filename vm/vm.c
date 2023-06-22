@@ -78,6 +78,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		struct page *newpage = (struct page *)malloc(sizeof(struct page));
 
+		if(newpage == NULL){
+			goto err;
+		}
+
 		bool (*page_init)(struct page *, enum vm_type, void *);
 
 		switch(VM_TYPE(type)){
@@ -129,6 +133,7 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+	
 	if(spt_find_page(spt,page->va) != NULL){
 		return succ;
 	}
@@ -142,9 +147,9 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
-	hash_delete(&spt->pages, &page->elem);
-	vm_dealloc_page (page);
-	return true;
+	if(page != NULL){
+		vm_dealloc_page (page);
+	}
 }
 
 /* Get the struct frame, that will be evicted. */
@@ -339,13 +344,13 @@ vm_do_claim_page (struct page *page) {
 	/* TODO: 페이지 테이블 엔트리를 삽입하여 
 	페이지의 가상 주소(VA)를 프레임의 물리 주소(PA)와 매핑합니다. */
 	struct thread *t = thread_current();
-	pml4_set_page (t->pml4, page->va, frame->kva, page->writable);
-	/* if(pml4_get_page (t->pml4, page->va) == NULL){//물리 주소가 비어있다.
+	//pml4_set_page (t->pml4, page->va, frame->kva, page->writable);
+	if(pml4_get_page (t->pml4, page->va) == NULL){//물리 주소가 비어있다.
 		if(!pml4_set_page (t->pml4, page->va, frame->kva, page->writable)){
 			// 할당하지 못했다면
 			return false;
 		}
-	} */
+	}
 
 	return swap_in (page, frame->kva); // uninit_initialize
 }
@@ -410,25 +415,10 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				memcpy(dst_page->frame->kva,src_page->frame->kva,PGSIZE);
 				break;
 			case VM_FILE:
-				/* if(!vm_alloc_page(type,src_page->va,src_page->writable)){
-					return false;
-				}
-				
-				if(!vm_claim_page(src_page->va)){
-					return false;
-				}
-
-				dst_page = spt_find_page(dst, src_page->va);
-				dst_page->file.file = file_reopen(src_page->file.file);
-				dst_page->file.offset = src_page->file.offset;
-				dst_page->file.read_bytes = src_page->file.read_bytes;
-				dst_page->file.zero_bytes = src_page->file.zero_bytes;
-				memcpy(dst_page->va,src_page->frame->kva,PGSIZE); */
 				break;
 		}
 	}
 	
-
     return true;
 }
 
