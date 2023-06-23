@@ -144,10 +144,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = sc_mmap(f);
 		break;
 	case SYS_MUNMAP:
+		//printf("진입하는거지?");
 		sc_munmap(f);
 		break;
 	#endif
+	default:
+		//printf("default에 들어옴\n");
+		break;
 	}
+	//printf("여기에 오는건 맞아?\n");
 }
 
 static
@@ -163,10 +168,12 @@ int sc_fork(struct intr_frame *f){
 	ptr_check(thread_fork_name);
 
 	tid_t fid = process_fork(thread_fork_name,f);
+	printf("fid : %d",fid);
 	if(fid != TID_ERROR){
 		struct thread *f_child = thread_child_find(fid);
 		sema_down(&f_child->fork_sema);
 		if(f_child->exit_status == TID_ERROR){
+			printf("자식이 이상해\n");
 			fid = TID_ERROR;
 		}
 	}
@@ -176,6 +183,7 @@ int sc_fork(struct intr_frame *f){
 static
 void sc_exec(struct intr_frame *f){
 	char * file = (char *)f->R.rdi;
+	int success = 0;
 	ptr_check(file);
 
 	char * cmd_line = palloc_get_page (0);
@@ -183,8 +191,9 @@ void sc_exec(struct intr_frame *f){
 		exit(-1);
 	}
 	strlcpy (cmd_line, file, PGSIZE);
-	process_exec(cmd_line);
-	exit(-1);
+	if(success = process_exec(cmd_line) < 0){
+		exit(-1);
+	}
 }
 
 static
@@ -235,7 +244,9 @@ int sc_open(struct intr_frame *f, struct lock* filesys_lock_){
 		fd = -1;
 	}else{
 		fd = process_add_file(open_file);
+		printf("open fd : %d\n" ,fd);
 		if(fd == -1){
+			printf("fd가 이상해\n");
 			file_close(open_file);
 		}
 	}
@@ -301,7 +312,9 @@ int sc_write(struct intr_frame *f, struct lock* filesys_lock_){
 	if(fd == 0){
 		real_write = -1;
 	}else if(fd == 1){
+		lock_acquire(filesys_lock_);
 		putbuf(buffer,size);
+		lock_release(filesys_lock_);
 		real_write = (int)size;
 	}else{
 		struct file *cur_file = get_file(fd);
@@ -346,7 +359,7 @@ void sc_close(struct intr_frame *f, struct lock* filesys_lock_){
 	
 	fd_check(fd);
 	struct file *cur_file = get_file(fd);
-
+	printf("close fd : %d\n",fd);
 	lock_acquire(filesys_lock_);
 	cur_file = NULL;
 	file_close(cur_file);
@@ -372,7 +385,7 @@ void *sc_mmap(struct intr_frame *f){
 	}
 
 	//addr 이 NULL 인 경우 실패 or addr이 페이지 정렬 안되면 실패  
-	if(addr == NULL || ((uint64_t)addr % PGSIZE) != 0){
+	if(addr == NULL || ((uint64_t)addr % PGSIZE)){
 		return succ;
 	}
 
@@ -391,7 +404,7 @@ void *sc_mmap(struct intr_frame *f){
 	if(offset > length){
 		return succ;
 	}
-	
+
 	return do_mmap(addr,length,writable,cur_file,offset);
 
 }

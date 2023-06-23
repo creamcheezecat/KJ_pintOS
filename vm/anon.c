@@ -55,6 +55,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+    //구조체 안에 있는 변수 초기화
  	anon_page->offset = -1;
 
     return true;
@@ -132,6 +133,7 @@ anon_destroy (struct page *page) {
         vm_free_frame(frame);
     }
 
-    if (anon_page->offset != -1)
+    if (anon_page->offset != -1){
         bitmap_set(swap_bitmap, anon_page->offset, 0);
+    }
 }

@@ -140,6 +140,7 @@ do_mmap (void *addr, size_t length, int writable,
 		fp->zero_bytes = page_zero_bytes;
 		
 		if(!vm_alloc_page_with_initializer(VM_FILE,addr,writable,load_file, fp)){
+			file_close(fr);
 			return NULL;
 		}
 		/* 
