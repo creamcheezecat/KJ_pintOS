@@ -56,10 +56,10 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 	
 	/* Your implementation */
-	struct hash_elem elem;
+	struct hash_elem elem; /* spt 에서 사용할 원소 */
 
-	bool writable;
-	int mapped_page_count;
+	bool writable; /* 쓰기를 할 수 있는지 확인하는 변수 */
+	int mapped_page_count; /* 파일 유형일때 연속된 페이지를 확인하는 변수 */
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	/* 각 유형의 데이터가 union에 바인딩됩니다.
@@ -79,7 +79,7 @@ struct frame {
 	void *kva;					/*kernel virtual address*/
 	struct page *page;
 
-	struct list_elem elem;
+	struct list_elem elem;		/* 프레임 리스트에 넣을 변수 */
 };
 
 /* The function table for page operations.
@@ -117,7 +117,7 @@ struct page_operations {
 활성 상태 vs. 비활성 상태 등을 추적합니다.
 */
 struct supplemental_page_table {
-	struct hash pages;
+	struct hash pages; /* 페이지들을 관리 하기위한 해쉬 자료구조 */
 };
 
 #include "threads/thread.h"

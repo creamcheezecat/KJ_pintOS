@@ -144,15 +144,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = sc_mmap(f);
 		break;
 	case SYS_MUNMAP:
-		//printf("진입하는거지?");
 		sc_munmap(f);
 		break;
 	#endif
-	default:
-		//printf("default에 들어옴\n");
-		break;
 	}
-	//printf("여기에 오는건 맞아?\n");
 }
 
 static
@@ -274,7 +269,6 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 	ptr_check(buffer);
 	
 	if(fd == 0){
-		lock_acquire(filesys_lock_);
 		real_read = (int)input_getc();
 	}else if(fd == 1){
 		real_read = -1;

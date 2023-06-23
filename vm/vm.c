@@ -24,8 +24,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
-	list_init(&frame_list);
-	lock_init(&frame_lock);
+	list_init(&frame_list); // 프레임을 관리할 list (전역 선언 되어있음)
+	lock_init(&frame_lock); // 프레임 동기화를 위한 lock (전역 선언 되어있음)
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -64,26 +64,17 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
-	/* Check wheter the upage is already occupied or not. */
 	/* upage가 이미 사용 중인지 확인합니다. */
 	if (spt_find_page (spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
-		 * TODO: should modify the field after calling the uninit_new. */
-		/* TODO: Insert the page into the spt. */
 		/* TODO: 페이지를 생성하고, VM 유형에 따라 초기화 프로그램을 가져옵니다.
 		TODO: 그런 다음 uninit_new를 호출하여 "uninit" 페이지 구조체를 생성합니다.
 		TODO: uninit_new를 호출한 후에 필드를 수정해야 합니다. */
 		/* TODO: 페이지를 spt에 삽입합니다. */
-
+		// 새로운 페이지를 생성(할당)
 		struct page *newpage = (struct page *)malloc(sizeof(struct page));
-
-		if(newpage == NULL){
-			goto err;
-		}
-
+		// 다른 initilaizer 를 넣어주기 위한 틀 만들기 
 		bool (*page_init)(struct page *, enum vm_type, void *);
-
+		// 타입에 따른 각자 다른 initilaizer 넣어주기
 		switch(VM_TYPE(type)){
 			case VM_ANON:
 				page_init = anon_initializer;
@@ -96,11 +87,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 				break;
 		}
-
+		/* 실제로 쓰기 전까지는 uninit 페이지로 있어야하니까 
+			uninit 페이지로 만들기 */
 		uninit_new(newpage,upage,init,type,aux,page_init);
-
+		// 페이지 속성에 맞게 수정
 		newpage->writable = writable;
-		
+		// 보조 페이지 테이블에 페이지 입력
 	 	return spt_insert_page(spt,newpage);
 	}
 	
@@ -116,14 +108,17 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 
 	struct hash_elem *e;
 	struct page tp;
+	// 새로운 페이지에 찾을 페이지 주소로 변경
 	tp.va = pg_round_down(va);
-
+	// 보조 페이지 테이블에 찾는 페이지가
+	// 있다면 hash_elem 값 반환 없다면 NULL 반환
 	e = hash_find(&spt->pages,&tp.elem);
 
 	if(e != NULL){
+		//hash_elem 값이 있다면 페이지로 만들어서 전달
 		page = hash_entry(e ,struct page, elem);
 	}
-
+	
 	return page;
 }
 
@@ -133,11 +128,11 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-	
+	// spt 안에 페이지가 이미 있는지 확인
 	if(spt_find_page(spt,page->va) != NULL){
 		return succ;
 	}
-
+	// spt 에 페이지를 입력한다.
 	if(hash_insert(&spt->pages,&page->elem)==NULL){
 		succ = true;
 	}
@@ -161,19 +156,27 @@ vm_get_victim (void) {
 	/* TODO: 제거 정책은 여러분에게 달려 있습니다. */
 	/* victim = list_entry(list_pop_front(&frame_list),struct frame, elem); */
 	struct list_elem *e;
+	// 프레임 교체시 동기화를 하기위한 락
 	lock_acquire(&frame_lock);
+	// 프레임이 담겨있는 리스트에 처음부터 마지막 까지 비교
 	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
-
+		// 하나의 페이지를 꺼낸다.
 		victim = list_entry(e,struct frame,elem);
 		uint64_t *pml4 = thread_current()->pml4;
 
 		if(victim->page == NULL){
 			break;
 		}
-
+		/* 
+		그 페이지에 접근했는지 확인한다. 
+		PTE가 설치된 시간과 마지막으로 지워진 시간 사이에 접근된 경우			
+		(최근에 접근한 경우 True, pte가 없는 경우 false)
+			*/
 		if(pml4_is_accessed(pml4,victim->page->va)){
-			pml4_set_accessed(pml4,victim->page->va,0);
+				// 최근에 접근 했다면 false 로 바꾸고 다음 페이지로 변경
+				pml4_set_accessed(pml4,victim->page->va,0);
 		}else{
+				// false 이 뜨면 희생 페이지로 함수를 반환한다.
 			break;
 		}
 	}
@@ -187,13 +190,19 @@ vm_get_victim (void) {
 오류 발생 시 NULL을 반환합니다. */
 static struct frame *
 vm_evict_frame (void) {
+	// 희생 페이지가 정해지면
 	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 	/* TODO: 희생자를 교체하고 제거된 프레임을 반환합니다. */
 	if (victim->page != NULL){
-		// 어디로 가는거냐고
+		// 어디로 가는걸까?
+		/*
+		anon or file 타입의 페이지가 물리 메모리를 할당받고 있으니 
+		둘의 swap out에 가는게 아닐까?
+		*/		
         swap_out(victim->page);
 	}
+	//깨끗한 페이지를 반환해준다.
 	return victim;
 	
 }
@@ -209,31 +218,30 @@ vm_evict_frame (void) {
 이 함수는 사용 가능한 메모리 공간을 얻기 위해 프레임을 대체합니다. */
 static struct frame *
 vm_get_frame (void) {
-	// printf("get_frame 진입\n");
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	// 페이지 하나를 할당한다.
 	void *kva = palloc_get_page(PAL_USER | PAL_ZERO);
-	
+	// 만약 페이지가 할당이 안됬다면 페이지가 꽉찼다는 말과 같으니까
 	if(kva == NULL){
-		/* while(frame == NULL){// 항상 유효한 주소를 반환해야함
-			frame = vm_evict_frame();
-		} */
+		// 프레임 중에 하나 선택해서 페이지 맵핑을 초기화 하고 그 프레임을 반환한다. 
 		frame = vm_evict_frame();
 		memset(frame->kva, 0, PGSIZE);
 		frame->page = NULL;
 		return frame;
 	}
+	//프레임 페이지 할당이 되었다면 프레임을 할당한다.
 	frame = (struct frame *)malloc(sizeof(struct frame));
 	frame->kva = kva;
 	frame->page = NULL;
-
+	//프레임들을 관리하기위에 리스트에넣는다
 	lock_acquire(&frame_lock);
 	list_push_back(&frame_list,&frame->elem);
 	lock_release(&frame_lock);
 
 	ASSERT(frame != NULL);
-    ASSERT(frame->kva != NULL);
-    ASSERT(frame->page == NULL);
+  	ASSERT(frame->kva != NULL);
+ 	ASSERT(frame->page == NULL);
 
 	return frame;
 }

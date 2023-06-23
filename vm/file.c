@@ -9,7 +9,7 @@ static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
 
-static bool lazy_load_segment (struct page *page, void *aux);
+static bool load_file (struct page *page, void *aux);
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -32,9 +32,9 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	// 먼저 page->operations에 file-backed pages에 대한 핸들러를 설정합니다.
 	page->operations = &file_ops;
-	//pritnf("file_backed_initializer 마지막 이네\n");
 	struct file_page *file_page = &page->file;
 
+	// file_page 의 변수들을 입력된 file_page 로 초기화 해준다.
 	struct file_page *aux_file = (struct file_page *)page->uninit.aux;
 	file_page->file = aux_file->file;
 	file_page->offset = aux_file->offset;
@@ -49,15 +49,15 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
-	//printf("file_backed_swap_in 진입\n");
 	size_t page_read_bytes = file_page->read_bytes;
     size_t page_zero_bytes = file_page->zero_bytes;
 
-
+	// 파일의 내용을 페이지에 입력한다
 	if(file_read_at(file_page->file, kva, page_read_bytes, file_page->offset) != (int)page_read_bytes){
+		// 제대로 입력이 안되면  false 반환
 		return false;
 	}
-
+	// 나머지 부분을 0으로 입력
 	memset(kva + page_read_bytes, 0, page_zero_bytes);
 	return true;
 }
@@ -70,10 +70,11 @@ file_backed_swap_in (struct page *page, void *kva) {
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
-	//printf("file_backed_swap_out 진입\n");
+	/* PML4의 가상 페이지 VPAGE에 대한 PTE가 변경되었는지 확인하여, 
+	변경되었다면 true를 반환합니다.
+	만약 PML4에 VPAGE에 대한 PTE가 없다면 false를 반환합니다. */
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		//printf("파일 변경 됐으니까 바꿔줘야지\n");
 		if(file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset) <= 0){
 			//PANIC("File_Write_Anything !!!!! in file_backed_swap_out");
 		}
@@ -81,9 +82,12 @@ file_backed_swap_out (struct page *page) {
 	}
 	page->frame->page = NULL;
 	page->frame = NULL;
+	/* 사용자 가상 페이지 UPAGE를 페이지 디렉토리 PD에서 "프레젠트되지 않음"으로 표시합니다.
+	이후에 페이지에 접근하면 페이지 폴트가 발생합니다.
+	페이지 테이블 항목의 다른 비트는 보존됩니다.
+	UPAGE는 매핑되어 있지 않아도 됩니다. */
 	pml4_clear_page(thread_current()->pml4, page->va);
 	return true;
-
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -92,22 +96,16 @@ static void
 file_backed_destroy (struct page *page) {
 	
 	// page struct를 해제할 필요는 없습니다. (file_backed_destroy의 호출자가 해야 함)
-	// printf("file_backed_destroy 오는거 맞아 ?");
 	struct file_page *file_page UNUSED = &page->file;
-	//printf("read_bytes %lld , offset %lld\n",page->file.read_bytes,page->file.offset);
-	//printf("read_bytes %lld , offset %lld\n",file_page->read_bytes,file_page->offset);
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		//printf("파일 변경 됐으니까 바꿔줘야지\n");
 		if(file_write_at(file_page->file, page->va, 
 				file_page->read_bytes, file_page->offset) <= 0){
 				//PANIC("File_Write_Anything !!!!! in file_becked_destory");
-				//printf("쓰인게 없다는데 맞아?\n");
 		}
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
-
 }
 
 /* Do the mmap */
@@ -122,6 +120,7 @@ do_mmap (void *addr, size_t length, int writable,
 	성공하면 파일에 매핑된 가상 주소를 반환
 	실패하면 NULL 반환
 	*/
+	// 파일의 정확한 상태와 위치를 알기 위해 file_reopen() 을 해준다.
 	struct file *fr = file_reopen(file);
 	void *map_addr = addr;
 	
@@ -140,21 +139,15 @@ do_mmap (void *addr, size_t length, int writable,
 		fp->read_bytes = page_read_bytes;
 		fp->zero_bytes = page_zero_bytes;
 		
-		if(!vm_alloc_page_with_initializer(VM_FILE,addr,writable,lazy_load_segment, fp)){
+		if(!vm_alloc_page_with_initializer(VM_FILE,addr,writable,load_file, fp)){
 			return NULL;
 		}
-
+		/* 
+		addr 부터 연속 가상 페이지가 만들어지니까 최초 페이지에 페이지들의 갯수만 알면
+		확인 할 수 있다.
+		*/
 		struct page *mapped_page = spt_find_page(&thread_current()->spt, addr);
 		mapped_page->mapped_page_count = length <= PGSIZE ? 1 : length % PGSIZE ? length / PGSIZE + 1 : length / PGSIZE;
-		/* if(length <= PGSIZE){
-			mapped_page->mapped_page_count = 1;
-		}else{
-			if(length % PGSIZE != 0){
-				mapped_page->mapped_page_count = (int)length / PGSIZE + 1;
-			}else{
-				mapped_page->mapped_page_count = (int)length / PGSIZE;
-			}
-		} */
 
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -175,15 +168,10 @@ do_munmap (void *addr) {
 	*/
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *unmap_page =  spt_find_page(spt, addr);
-	//printf("ummap 진입한거 확실한거지??\n");
 	int page_count = unmap_page->mapped_page_count;
 	for (int i = 0 ; i < page_count ; i++){
-		//printf("여기몇번오나??\n");
 		if(unmap_page){
-			//printf("unmap_page 삭제\n");
 			destroy(unmap_page);
-			//printf("unmap_page destory 갔다옴\n");
-			//spt_remove_page(spt, unmap_page);
 		}
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);
@@ -191,16 +179,9 @@ do_munmap (void *addr) {
 }
 
 static bool
-lazy_load_segment (struct page *page, void *aux) {
+load_file (struct page *page, void *aux) {
 	ASSERT(page->frame != NULL);
     ASSERT(aux != NULL);
-
-	/* TODO: Load the segment from the file */
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
-	/* TODO: 파일로부터 세그먼트를 로드합니다. /
-	/ TODO: 이 함수는 주소 VA에 해 첫 번째 페이지 폴트가 발생할 때 호출됩니다. /
-	/ TODO: 이 함수를 호출할 때 VA는 사용 가능합니다. */
 
 	struct file_page *fp = (struct file_page *)aux;
 	struct file *file = fp->file;
