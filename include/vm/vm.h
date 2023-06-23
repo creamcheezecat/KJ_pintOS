@@ -118,6 +118,7 @@ struct page_operations {
 */
 struct supplemental_page_table {
 	struct hash pages; /* 페이지들을 관리 하기위한 해쉬 자료구조 */
+	struct lock page_lock;
 };
 
 #include "threads/thread.h"

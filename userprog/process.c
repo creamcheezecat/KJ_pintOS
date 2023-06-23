@@ -217,7 +217,7 @@ __do_fork (void *aux) {
 			*(current->fdt + i) = NULL;
 		}
     }
-	//current->next_fd = parent->next_fd;
+	current->next_fd = parent->next_fd;
 
 	sema_up(&current->fork_sema);
 
@@ -317,18 +317,14 @@ thread_child_find(tid_t child_tid){
 	struct list_elem *e = NULL;
 	struct thread *t_child = NULL;
 	
-	enum intr_level intr = intr_disable();
 	for (e = list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){	
 		t_child = list_entry(e,struct thread,child_elem);
 		if(t_child->tid == child_tid){
-			break;
-		}else{
-			t_child = NULL;
+			return t_child;
 		}
 	}
-	intr_set_level(intr);
 
-	return t_child;
+	return NULL;
 }
 
 /*------------syscall-----------------------------------------*/
@@ -872,7 +868,7 @@ lazy_load_segment (struct page *page, void *aux) {
     size_t page_read_bytes = fp->read_bytes;
     size_t page_zero_bytes = fp->zero_bytes;
 
-	free(aux);c
+	free(aux);
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
 		palloc_free_page(page->frame->kva);

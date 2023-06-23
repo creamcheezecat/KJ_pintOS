@@ -80,13 +80,13 @@ file_backed_swap_out (struct page *page) {
 		}
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
-	page->frame->page = NULL;
-	page->frame = NULL;
 	/* 사용자 가상 페이지 UPAGE를 페이지 디렉토리 PD에서 "프레젠트되지 않음"으로 표시합니다.
 	이후에 페이지에 접근하면 페이지 폴트가 발생합니다.
 	페이지 테이블 항목의 다른 비트는 보존됩니다.
 	UPAGE는 매핑되어 있지 않아도 됩니다. */
 	pml4_clear_page(thread_current()->pml4, page->va);
+	page->frame->page = NULL;
+	page->frame = NULL;
 	return true;
 }
 

@@ -473,7 +473,7 @@ bool thread_compare_priority(const struct list_elem *a,
 void thread_compare(void)
 {
 	// ready_list에 스레드가 존재한다면
-	if (!list_empty(&ready_list))
+	if (!intr_context() && !list_empty(&ready_list))
 	{
 		/*
 		현재 실행중인 스레드와 ready_list에 우선순위가 가장 높은 스레드와 비교해서

@@ -110,6 +110,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page tp;
 	// 새로운 페이지에 찾을 페이지 주소로 변경
 	tp.va = pg_round_down(va);
+	lock_acquire(&spt->page_lock);
 	// 보조 페이지 테이블에 찾는 페이지가
 	// 있다면 hash_elem 값 반환 없다면 NULL 반환
 	e = hash_find(&spt->pages,&tp.elem);
@@ -118,7 +119,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 		//hash_elem 값이 있다면 페이지로 만들어서 전달
 		page = hash_entry(e ,struct page, elem);
 	}
-	
+	lock_release(&spt->page_lock);
 	return page;
 }
 
@@ -133,10 +134,11 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		return succ;
 	}
 	// spt 에 페이지를 입력한다.
+	lock_acquire(&spt->page_lock);
 	if(hash_insert(&spt->pages,&page->elem)==NULL){
 		succ = true;
 	}
-
+	lock_release(&spt->page_lock);
 	return succ;
 }
 
@@ -367,6 +369,7 @@ vm_do_claim_page (struct page *page) {
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	hash_init(&spt->pages,page_hash_func,page_less_func,NULL);
+	lock_init(&spt->page_lock);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -377,7 +380,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	// TODO: src의 각 페이지를 순회하고 dst에 해당 entry의 사본을 만듭니다.
 	// TODO: uninit page를 할당하고 그것을 즉시 claim해야 합니다.
     struct hash_iterator i;
-
+	lock_acquire(&src->page_lock);
 	hash_first(&i, &src->pages);
 	while(hash_next(&i)){
 		// src_page 정보
@@ -411,10 +414,12 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				break;
 			case VM_ANON:
 				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
+					lock_release(&src->page_lock);
 					return false;
 				}
 				
 				if(!vm_claim_page(src_page->va)){
+					lock_release(&src->page_lock);
 					return false;
 				}
 
@@ -426,7 +431,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 				break;
 		}
 	}
-	
+	lock_release(&src->page_lock);
     return true;
 }
 
