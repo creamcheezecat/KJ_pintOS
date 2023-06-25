@@ -79,12 +79,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			case VM_ANON:
 				page_init = anon_initializer;
 				break;
-			case VM_UNINIT:
 			case VM_FILE:
 				page_init = file_backed_initializer;
-				break;
-			default:
-
 				break;
 		}
 		/* 실제로 쓰기 전까지는 uninit 페이지로 있어야하니까 
@@ -174,7 +170,7 @@ vm_get_victim (void) {
 		PTE가 설치된 시간과 마지막으로 지워진 시간 사이에 접근된 경우			
 		(최근에 접근한 경우 True, pte가 없는 경우 false)
 			*/
-		if(pml4_is_accessed(pml4,victim->page->va)){
+		else if(pml4_is_accessed(pml4,victim->page->va)){
 				// 최근에 접근 했다면 false 로 바꾸고 다음 페이지로 변경
 				pml4_set_accessed(pml4,victim->page->va,0);
 		}else{
@@ -386,6 +382,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		// src_page 정보
 		struct page *src_page = hash_entry(hash_cur(&i), struct page, elem);
 		struct page *dst_page = NULL;
+		struct file_page *file_aux = NULL;
 		enum vm_type type = src_page->operations->type;
 		void *aux = NULL;
 		
@@ -415,13 +412,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 			case VM_ANON:
 				if(!vm_alloc_page(type,src_page->va,src_page->writable)){
 					lock_release(&src->page_lock);
-					printf("vm_alloc_page 실패\n");
 					return false;
 				}
 				
 				if(!vm_claim_page(src_page->va)){
 					lock_release(&src->page_lock);
-					printf("vm_claim_page 실패\n");
 					return false;
 				}
 

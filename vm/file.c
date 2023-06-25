@@ -35,11 +35,11 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	struct file_page *file_page = &page->file;
 
 	// file_page 의 변수들을 입력된 file_page 로 초기화 해준다.
-	struct file_page *aux_file = (struct file_page *)page->uninit.aux;
+/* 	struct file_page *aux_file = (struct file_page *)page->uninit.aux;
 	file_page->file = aux_file->file;
 	file_page->offset = aux_file->offset;
 	file_page->read_bytes = aux_file->read_bytes;
-	file_page->zero_bytes = aux_file->zero_bytes;
+	file_page->zero_bytes = aux_file->zero_bytes; */
 	
 	return true;
 }
@@ -84,9 +84,10 @@ file_backed_swap_out (struct page *page) {
 	이후에 페이지에 접근하면 페이지 폴트가 발생합니다.
 	페이지 테이블 항목의 다른 비트는 보존됩니다.
 	UPAGE는 매핑되어 있지 않아도 됩니다. */
-	pml4_clear_page(thread_current()->pml4, page->va);
 	page->frame->page = NULL;
 	page->frame = NULL;
+	pml4_clear_page(thread_current()->pml4, page->va);
+
 	return true;
 }
 
@@ -106,6 +107,7 @@ file_backed_destroy (struct page *page) {
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
+
 }
 
 /* Do the mmap */
@@ -127,7 +129,7 @@ do_mmap (void *addr, size_t length, int writable,
 	size_t read_bytes = file_length(fr) < length ? file_length(fr) : length;
 	size_t zero_bytes = PGSIZE - (read_bytes % PGSIZE);
 
-	while (read_bytes > 0 || zero_bytes > 0) {
+	while (read_bytes > 0) {
 
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
@@ -169,7 +171,14 @@ do_munmap (void *addr) {
 	*/
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	struct page *unmap_page =  spt_find_page(spt, addr);
+
+	if(unmap_page->frame == NULL){
+		vm_claim_page(unmap_page);
+	}
+
+	struct file *file = unmap_page->file.file;
 	int page_count = unmap_page->mapped_page_count;
+
 	for (int i = 0 ; i < page_count ; i++){
 		if(unmap_page){
 			destroy(unmap_page);
@@ -177,6 +186,7 @@ do_munmap (void *addr) {
 		addr += PGSIZE;
 		unmap_page = spt_find_page(spt, addr);
 	}
+	file_close(file);
 }
 
 static bool
@@ -185,28 +195,22 @@ load_file (struct page *page, void *aux) {
     ASSERT(aux != NULL);
 
 	struct file_page *fp = (struct file_page *)aux;
-	struct file *file = fp->file;
-	off_t offset = fp->offset;
-    size_t page_read_bytes = fp->read_bytes;
-    size_t page_zero_bytes = fp->zero_bytes;
-
-	free(aux);
 
 	page->file = (struct file_page){
-        .file = file,
-        .offset = offset,
-        .read_bytes = page_read_bytes,
-        .zero_bytes = page_zero_bytes
+        .file = fp->file,
+        .offset = fp->offset,
+        .read_bytes = fp->read_bytes,
+        .zero_bytes = fp->zero_bytes
     };
 
 	void *kpage = page->frame->kva;
 
-	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
-		vm_dealloc_page(page);
+	if(file_read_at(fp->file, kpage, fp->read_bytes, fp->offset) != (int)(fp->read_bytes)){
+		palloc_free_page(kpage);
 		return false;
 	}
 
-	memset(kpage + page_read_bytes, 0, page_zero_bytes);
-
+	memset(kpage + fp->read_bytes, 0, fp->zero_bytes);
+	free(fp);
 	return true;
 }

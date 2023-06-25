@@ -162,7 +162,6 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */ /* 스위칭을 위한 정보입니다. */
 	unsigned magic;                     /* Detects stack overflow. */ /* 스택 오버플로우를 감지합니다. */
 
-	//struct hash vm;						/* 스레드가 가진 가상 주소 공간을 관리하는 해쉬 */
 };
 
 /* If false (default), use round-robin scheduler.

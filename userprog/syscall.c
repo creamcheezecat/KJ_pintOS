@@ -20,19 +20,19 @@ static void sc_exit(struct intr_frame *);
 static int sc_fork(struct intr_frame *);
 static void sc_exec(struct intr_frame *);
 static int sc_wait(struct intr_frame *);
-static bool sc_create(struct intr_frame *,struct lock*);
-static bool sc_remove(struct intr_frame *,struct lock*);
-static int sc_open(struct intr_frame *,struct lock*);
-static int sc_filesize(struct intr_frame *,struct lock*);
-static int sc_read(struct intr_frame *,struct lock*);
-static int sc_write(struct intr_frame *,struct lock*);
-static void sc_seek(struct intr_frame *,struct lock*);
-static unsigned sc_tell(struct intr_frame *,struct lock*);
-static void sc_close(struct intr_frame *,struct lock*);
+static bool sc_create(struct intr_frame *);
+static bool sc_remove(struct intr_frame *);
+static int sc_open(struct intr_frame *);
+static int sc_filesize(struct intr_frame *);
+static int sc_read(struct intr_frame *);
+static int sc_write(struct intr_frame *);
+static void sc_seek(struct intr_frame *);
+static unsigned sc_tell(struct intr_frame *);
+static void sc_close(struct intr_frame *);
 
 #ifdef VM
-static void *sc_mmap(struct intr_frame *f);
-static void sc_munmap(struct intr_frame *f);
+static void *sc_mmap(struct intr_frame *);
+static void sc_munmap(struct intr_frame *);
 #endif
 
 static struct file *get_file(int);
@@ -65,6 +65,8 @@ syscall 명령은 Model Specific Register (MSR)에서 값을 읽어옴으로써 
 
 void
 syscall_init (void) {
+	lock_init(&filesys_lock);
+
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
@@ -79,7 +81,6 @@ syscall_init (void) {
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 
-	lock_init(&filesys_lock);
 }
 
 
@@ -113,46 +114,44 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = sc_wait(f);
 		break;
 	case SYS_CREATE:
-		f->R.rax = sc_create(f,&filesys_lock);
+		f->R.rax = sc_create(f);
 		break;
 	case SYS_REMOVE:
-		f->R.rax = sc_remove(f,&filesys_lock);
+		f->R.rax = sc_remove(f);
 		break;
 	case SYS_OPEN:
-		f->R.rax = sc_open(f,&filesys_lock);
+		f->R.rax = sc_open(f);
 		break;
 	case SYS_FILESIZE:
-		f->R.rax = sc_filesize(f,&filesys_lock);
+		f->R.rax = sc_filesize(f);
 		break;
 	case SYS_READ:
-		f->R.rax = sc_read(f,&filesys_lock);
+		f->R.rax = sc_read(f);
 		break;
 	case SYS_WRITE:
-		f->R.rax = sc_write(f,&filesys_lock);
+		f->R.rax = sc_write(f);
 		break;
 	case SYS_SEEK:
-		sc_seek(f,&filesys_lock);
+		sc_seek(f);
 		break;
 	case SYS_TELL:
-		f->R.rax = sc_tell(f,&filesys_lock);
+		f->R.rax = sc_tell(f);
 		break;
 	case SYS_CLOSE:
-		sc_close(f,&filesys_lock);
+		sc_close(f);
 		break;
 	#ifdef VM
 	case SYS_MMAP:
 		f->R.rax = sc_mmap(f);
 		break;
 	case SYS_MUNMAP:
-		//printf("진입하는거지?");
 		sc_munmap(f);
 		break;
 	#endif
 	default:
-		//printf("default에 들어옴\n");
+		exit(-3);
 		break;
 	}
-	//printf("여기에 오는건 맞아?\n");
 }
 
 static
@@ -168,15 +167,16 @@ int sc_fork(struct intr_frame *f){
 	ptr_check(thread_fork_name);
 
 	tid_t fid = process_fork(thread_fork_name,f);
-	printf("fid : %d",fid);
+
 	if(fid != TID_ERROR){
 		struct thread *f_child = thread_child_find(fid);
 		sema_down(&f_child->fork_sema);
-		if(f_child->exit_status == TID_ERROR){
-			printf("자식이 이상해\n");
+		if(f_child->exit_status == -2){
+			sema_up(&f_child->clear_sema);
 			fid = TID_ERROR;
 		}
 	}
+
 	return fid;
 }
 
@@ -186,7 +186,7 @@ void sc_exec(struct intr_frame *f){
 	int success = 0;
 	ptr_check(file);
 
-	char * cmd_line = palloc_get_page (0);
+	char * cmd_line = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (cmd_line == NULL){
 		exit(-1);
 	}
@@ -203,74 +203,74 @@ int sc_wait(struct intr_frame *f){
 }
 
 static
-bool sc_create(struct intr_frame *f, struct lock* filesys_lock_){
+bool sc_create(struct intr_frame *f){
 	char *file_create_name = (char *)f->R.rdi;
 	off_t initial_size = (off_t)f->R.rsi;
 
 	ptr_check(file_create_name);
 
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	bool success = filesys_create(file_create_name,initial_size);
-	lock_release(filesys_lock_);
+	lock_release(&filesys_lock);
 
 	return success; 
 }
 
 static
-bool sc_remove(struct intr_frame *f, struct lock* filesys_lock_){
+bool sc_remove(struct intr_frame *f){
 	char *file_remove_name = (char *)f->R.rdi;
 
 	ptr_check(file_remove_name);
 
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	bool success = filesys_remove(file_remove_name);
-	lock_release(filesys_lock_);
+	lock_release(&filesys_lock);
 
 	return success;
 }
 
 static
-int sc_open(struct intr_frame *f, struct lock* filesys_lock_){
+int sc_open(struct intr_frame *f){
 	char *file_open_name = (char *)f->R.rdi;
 	struct thread *curr = thread_current();
 	int fd = curr->next_fd;
 
 	ptr_check(file_open_name);
 
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	struct file *open_file = filesys_open(file_open_name);
 
 	if(open_file == NULL){
 		fd = -1;
 	}else{
 		fd = process_add_file(open_file);
-		printf("open fd : %d\n" ,fd);
 		if(fd == -1){
-			printf("fd가 이상해\n");
+
+			open_file = NULL;
 			file_close(open_file);
+			
 		}
 	}
-	lock_release(filesys_lock_);
+	lock_release(&filesys_lock);
 
 	return fd;
 }
 
 static
-int sc_filesize(struct intr_frame *f, struct lock* filesys_lock_){
+int sc_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
 	struct file *cur_file = get_file(fd);
 
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	int success = file_length(cur_file);
-	lock_release(filesys_lock_);
-
+	lock_release(&filesys_lock);
 	return success;
 }
 
 static
-int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
+int sc_read(struct intr_frame *f){
 	int fd = f->R.rdi;
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = (unsigned)f->R.rdx;
@@ -291,16 +291,16 @@ int sc_read(struct intr_frame *f, struct lock* filesys_lock_){
 			exit(-1);
 		}
 		#endif
-		lock_acquire(filesys_lock_);
+		lock_acquire(&filesys_lock);
 		real_read = (int)file_read(cur_file,buffer,size);
-		lock_release(filesys_lock_);
+		lock_release(&filesys_lock);
 	}
 	
 	return real_read;
 }
 
 static
-int sc_write(struct intr_frame *f, struct lock* filesys_lock_){
+int sc_write(struct intr_frame *f){
 	int fd = f->R.rdi;
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = (unsigned)f->R.rdx;
@@ -312,58 +312,51 @@ int sc_write(struct intr_frame *f, struct lock* filesys_lock_){
 	if(fd == 0){
 		real_write = -1;
 	}else if(fd == 1){
-		lock_acquire(filesys_lock_);
 		putbuf(buffer,size);
-		lock_release(filesys_lock_);
 		real_write = (int)size;
 	}else{
 		struct file *cur_file = get_file(fd);
-		lock_acquire(filesys_lock_);
+		lock_acquire(&filesys_lock);
 		real_write = (int)file_write(cur_file,buffer,size);
-		lock_release(filesys_lock_);
+		lock_release(&filesys_lock);
 	}
-	//printf("name : %s, fd : %d , real_write : %d\n",thread_current()->name,fd,real_write);
 	return real_write;
 }
 
 static
-void sc_seek(struct intr_frame *f, struct lock* filesys_lock_){
+void sc_seek(struct intr_frame *f){
 	int fd = f->R.rdi;
 	unsigned position = (unsigned)f->R.rsi;
 
 	fd_check(fd);
 	struct file *cur_file = get_file(fd);
-
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	file_seek(cur_file,position);
-	lock_release(filesys_lock_);
+	lock_release(&filesys_lock);
 }
 
 static
-unsigned sc_tell(struct intr_frame *f, struct lock* filesys_lock_){
+unsigned sc_tell(struct intr_frame *f){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
 	struct file *cur_file = get_file(fd);
-
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	unsigned success = (unsigned)file_tell(cur_file);
-	lock_release(filesys_lock_);
-
+	lock_release(&filesys_lock);
 	return success;
 }
 
 static
-void sc_close(struct intr_frame *f, struct lock* filesys_lock_){
+void sc_close(struct intr_frame *f){
 	int fd = f->R.rdi;
 	
 	fd_check(fd);
 	struct file *cur_file = get_file(fd);
-	printf("close fd : %d\n",fd);
-	lock_acquire(filesys_lock_);
+	lock_acquire(&filesys_lock);
 	cur_file = NULL;
 	file_close(cur_file);
-	lock_release(filesys_lock_);
+	lock_release(&filesys_lock);
 }
 #ifdef VM
 
@@ -378,12 +371,13 @@ void *sc_mmap(struct intr_frame *f){
 
 	struct file *cur_file = get_file(fd);
 	/* 실패 할때 NULL 반환 */
-
+	lock_acquire(&filesys_lock);
 	// fd로 열린 파일의 길이가 0 바이트 면 호출 실패 or length 이 0 일때도 실패
 	if(file_length(cur_file) <= 0  || (int)length <= 0){
+		lock_release(&filesys_lock);
 		return succ;
 	}
-
+	lock_release(&filesys_lock);
 	//addr 이 NULL 인 경우 실패 or addr이 페이지 정렬 안되면 실패  
 	if(addr == NULL || ((uint64_t)addr % PGSIZE)){
 		return succ;
@@ -404,8 +398,10 @@ void *sc_mmap(struct intr_frame *f){
 	if(offset > length){
 		return succ;
 	}
-
-	return do_mmap(addr,length,writable,cur_file,offset);
+	lock_acquire(&filesys_lock);
+	succ = do_mmap(addr,length,writable,cur_file,offset);
+	lock_release(&filesys_lock);
+	return succ;
 
 }
 
@@ -419,8 +415,9 @@ void sc_munmap(struct intr_frame *f){
 	if((uint64_t)addr % PGSIZE != 0){
 		exit(-1);
 	}
-
+	lock_acquire(&filesys_lock);
 	do_munmap(addr);
+	lock_release(&filesys_lock);
 }
 
 #endif

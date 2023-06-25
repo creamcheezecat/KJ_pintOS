@@ -24,7 +24,7 @@
 
 #include "threads/synch.h"
 #include "include/userprog/syscall.h"
-
+#include "include/lib/kernel/hash.h"
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -225,7 +225,7 @@ __do_fork (void *aux) {
 	do_iret (&if_);
 error:
 	sema_up(&current->fork_sema);
-	exit(-1);
+	exit(-2);
 }
 
 /* Switch the current execution context to the f_name.
@@ -299,16 +299,18 @@ process_wait (tid_t child_tid) {
 	t_child = thread_child_find(child_tid);
 	// 없다면 -1을 반환한다.
 	if(t_child == NULL){
-		return -1;
+		return -2;
 	}
 	//있다면 자식 리스트에서 그 자식을 빼내고 자신이 자식의 waitlist에 들어간다. 
 	list_remove(&t_child->child_elem);
 
 	sema_down(&t_child->wait_sema);
+	//list_remove(&t_child->child_elem);
 	sema_up(&t_child->clear_sema);
 
 	return t_child->exit_status;
 }
+
 
 // 인자 값으로 받은 tid 를 가지고 현재 내 자식 리스트에서 비교해서 찾는다.
 struct thread*
@@ -365,16 +367,20 @@ process_exit (void) {
 
 	process_cleanup ();
 
+	/* lock_acquire(&curr->spt.page_lock);
+	hash_destroy(&curr->spt.pages, NULL);
+	lock_release(&curr->spt.page_lock); */
+
 	sema_up(&curr->wait_sema);
 	
 
-	struct list_elem *e = NULL;
+	/* struct list_elem *e = NULL;
 	struct thread *c_child = NULL;
 
 	for (e = list_begin(&curr->children); e != list_end(&curr->children); e = list_next(e)){	
 		c_child = list_entry(e, struct thread, child_elem);
 		sema_up(&c_child->clear_sema);
-	}
+	} */
 
 	sema_down(&curr->clear_sema);
 }
@@ -868,15 +874,15 @@ lazy_load_segment (struct page *page, void *aux) {
     size_t page_read_bytes = fp->read_bytes;
     size_t page_zero_bytes = fp->zero_bytes;
 
-	free(aux);
+	
 
 	if(file_read_at(file, kpage, page_read_bytes, offset) != (int)page_read_bytes){
-		palloc_free_page(page->frame->kva);
+		palloc_free_page(kpage);
 		return false;
 	}
 
 	memset(kpage + page_read_bytes, 0, page_zero_bytes);
-
+	free(fp);
 	return true;
 }
 
