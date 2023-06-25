@@ -398,9 +398,9 @@ void *sc_mmap(struct intr_frame *f){
 	if(offset > length){
 		return succ;
 	}
-	lock_acquire(&filesys_lock);
+
 	succ = do_mmap(addr,length,writable,cur_file,offset);
-	lock_release(&filesys_lock);
+	
 	return succ;
 
 }
@@ -415,9 +415,8 @@ void sc_munmap(struct intr_frame *f){
 	if((uint64_t)addr % PGSIZE != 0){
 		exit(-1);
 	}
-	lock_acquire(&filesys_lock);
+
 	do_munmap(addr);
-	lock_release(&filesys_lock);
 }
 
 #endif

@@ -4,6 +4,7 @@
 
 #include "include/threads/vaddr.h"
 #include "include/threads/mmu.h"
+#include "include/userprog/syscall.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -33,13 +34,6 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	// 먼저 page->operations에 file-backed pages에 대한 핸들러를 설정합니다.
 	page->operations = &file_ops;
 	struct file_page *file_page = &page->file;
-
-	// file_page 의 변수들을 입력된 file_page 로 초기화 해준다.
-/* 	struct file_page *aux_file = (struct file_page *)page->uninit.aux;
-	file_page->file = aux_file->file;
-	file_page->offset = aux_file->offset;
-	file_page->read_bytes = aux_file->read_bytes;
-	file_page->zero_bytes = aux_file->zero_bytes; */
 	
 	return true;
 }
@@ -53,10 +47,13 @@ file_backed_swap_in (struct page *page, void *kva) {
     size_t page_zero_bytes = file_page->zero_bytes;
 
 	// 파일의 내용을 페이지에 입력한다
+	lock_acquire(&filesys_lock);
 	if(file_read_at(file_page->file, kva, page_read_bytes, file_page->offset) != (int)page_read_bytes){
 		// 제대로 입력이 안되면  false 반환
+		lock_release(&filesys_lock);
 		return false;
 	}
+	lock_release(&filesys_lock);
 	// 나머지 부분을 0으로 입력
 	memset(kva + page_read_bytes, 0, page_zero_bytes);
 	return true;
@@ -75,9 +72,9 @@ file_backed_swap_out (struct page *page) {
 	만약 PML4에 VPAGE에 대한 PTE가 없다면 false를 반환합니다. */
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		if(file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset) <= 0){
-			//PANIC("File_Write_Anything !!!!! in file_backed_swap_out");
-		}
+		lock_acquire(&filesys_lock);
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+		lock_release(&filesys_lock);
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	/* 사용자 가상 페이지 UPAGE를 페이지 디렉토리 PD에서 "프레젠트되지 않음"으로 표시합니다.
@@ -100,10 +97,9 @@ file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 	if (pml4_is_dirty(thread_current()->pml4, page->va))
 	{
-		if(file_write_at(file_page->file, page->va, 
-				file_page->read_bytes, file_page->offset) <= 0){
-				//PANIC("File_Write_Anything !!!!! in file_becked_destory");
-		}
+		lock_acquire(&filesys_lock);
+		file_write_at(file_page->file, page->va, file_page->read_bytes, file_page->offset);
+		lock_release(&filesys_lock);
 		pml4_set_dirty(thread_current()->pml4, page->va, 0);
 	}
 	pml4_clear_page(thread_current()->pml4, page->va);
@@ -178,7 +174,7 @@ do_munmap (void *addr) {
 
 	struct file *file = unmap_page->file.file;
 	int page_count = unmap_page->mapped_page_count;
-
+	unmap_page->mapped_page_count = 0;
 	for (int i = 0 ; i < page_count ; i++){
 		if(unmap_page){
 			destroy(unmap_page);
@@ -205,11 +201,14 @@ load_file (struct page *page, void *aux) {
 
 	void *kpage = page->frame->kva;
 
+	lock_acquire(&filesys_lock);
 	if(file_read_at(fp->file, kpage, fp->read_bytes, fp->offset) != (int)(fp->read_bytes)){
+		lock_release(&filesys_lock);
 		palloc_free_page(kpage);
 		return false;
 	}
-
+	lock_release(&filesys_lock);
+	
 	memset(kpage + fp->read_bytes, 0, fp->zero_bytes);
 	free(fp);
 	return true;

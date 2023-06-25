@@ -225,7 +225,7 @@ __do_fork (void *aux) {
 	do_iret (&if_);
 error:
 	sema_up(&current->fork_sema);
-	exit(-2);
+	exit(-1);
 }
 
 /* Switch the current execution context to the f_name.
@@ -299,7 +299,7 @@ process_wait (tid_t child_tid) {
 	t_child = thread_child_find(child_tid);
 	// 없다면 -1을 반환한다.
 	if(t_child == NULL){
-		return -2;
+		return -1;
 	}
 	//있다면 자식 리스트에서 그 자식을 빼내고 자신이 자식의 waitlist에 들어간다. 
 	list_remove(&t_child->child_elem);
