@@ -1,5 +1,5 @@
 #!/bin/bash
 make clean
-cd vm/
+cd filesys
 make check
 cd ..

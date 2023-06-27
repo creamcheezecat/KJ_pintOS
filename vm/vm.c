@@ -169,7 +169,7 @@ vm_get_victim (void) {
 		그 페이지에 접근했는지 확인한다. 
 		PTE가 설치된 시간과 마지막으로 지워진 시간 사이에 접근된 경우			
 		(최근에 접근한 경우 True, pte가 없는 경우 false)
-			*/
+		*/
 		else if(pml4_is_accessed(pml4,victim->page->va)){
 				// 최근에 접근 했다면 false 로 바꾸고 다음 페이지로 변경
 				pml4_set_accessed(pml4,victim->page->va,0);
@@ -254,7 +254,7 @@ vm_stack_growth (void *addr UNUSED) {
 /* 쓰기 보호된 페이지에서 발생한 오류를 처리합니다. */
 static bool
 vm_handle_wp (struct page *page UNUSED) {
-
+	
 }
 
 /* Return true on success */
@@ -276,7 +276,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	if(addr == NULL || is_kernel_vaddr(addr) || !not_present){
 		return success;
 	}
-	
+
 	void *rsp = f->rsp;
 	/* user == True: access by user, false: access by kernel. */
 	if(!user){
