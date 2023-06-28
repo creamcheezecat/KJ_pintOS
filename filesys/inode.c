@@ -35,11 +35,13 @@ struct inode {
 	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
 	struct inode_disk data;             /* Inode content. */
 };
-
+//수정 필요
 /* Returns the disk sector that contains byte offset POS within
  * INODE.
  * Returns -1 if INODE does not contain data for a byte at offset
  * POS. */
+/* INODE 내에서 바이트 오프셋 POS를 포함하는 디스크 섹터를 반환합니다.
+INODE에 오프셋 POS에 대한 데이터가 없는 경우 -1을 반환합니다. */
 static disk_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) {
 	ASSERT (inode != NULL);
@@ -58,7 +60,7 @@ void
 inode_init (void) {
 	list_init (&open_inodes);
 }
-
+// 수정 필요
 /* Initializes an inode with LENGTH bytes of data and
  * writes the new inode to sector SECTOR on the file system
  * disk.
@@ -99,10 +101,12 @@ inode_create (disk_sector_t sector, off_t length) {
 	}
 	return success;
 }
-
+// 수정 필요
 /* Reads an inode from SECTOR
  * and returns a `struct inode' that contains it.
  * Returns a null pointer if memory allocation fails. */
+/* SECTOR에서 inode를 읽어와 그를 포함하는 'struct inode'를 반환합니다.
+메모리 할당에 실패한 경우 널 포인터를 반환합니다. */
 struct inode *
 inode_open (disk_sector_t sector) {
 	struct list_elem *e;
@@ -272,6 +276,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 			/* If the sector contains data before or after the chunk
 			   we're writing, then we need to read in the sector
 			   first.  Otherwise we start with a sector of all zeros. */
+			/* 만약 쓰는 청크(chunk) 이전이나 이후에 데이터가 있는 섹터라면, 
+			섹터를 먼저 읽어와야 합니다.
+			그렇지 않으면 모든 값이 0인 섹터에서 시작합니다. */
 			if (sector_ofs > 0 || chunk_size < sector_left) 
 				disk_read (filesys_disk, sector_idx, bounce);
 			else

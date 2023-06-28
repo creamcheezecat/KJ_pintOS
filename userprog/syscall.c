@@ -35,6 +35,15 @@ static void *sc_mmap(struct intr_frame *);
 static void sc_munmap(struct intr_frame *);
 #endif
 
+#ifdef EFILESYS
+static bool sc_chdir(struct intr_frame *);
+static bool sc_mkdir(struct intr_frame *);
+static bool sc_readdir(struct intr_frame *);
+static bool sc_isdir(struct intr_frame *);
+static int sc_inumber(struct intr_frame *);
+static int sc_symlink(struct intr_frame *);
+#endif
+
 static struct file *get_file(int);
 static void ptr_check (void *ptr);
 static void fd_check(int fd);
@@ -148,20 +157,40 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		sc_munmap(f);
 		break;
 	#endif
+	#ifdef EFILESYS
+	case SYS_CHDIR:
+		f->R.rax = sc_chdir(f);
+		break;
+	case SYS_MKDIR:
+		f->R.rax = sc_mkdir(f);
+		break;
+	case SYS_READDIR:
+		f->R.rax = sc_readdir(f);
+		break;
+	case SYS_ISDIR:
+		f->R.rax = sc_isdir(f);
+		break;
+	case SYS_INUMBER:
+		f->R.rax = sc_inumber(f);
+		break;
+	case SYS_SYMLINK:
+		f->R.rax = sc_symlink(f);
+		break;
+	#endif
 	default:
 		exit(-3);
 		break;
 	}
 }
 
-static
-void sc_exit(struct intr_frame *f){
+static void 
+sc_exit(struct intr_frame *f){
 	int status = f->R.rdi;
 	exit(status);
 }
 
-static
-int sc_fork(struct intr_frame *f){
+static int 
+sc_fork(struct intr_frame *f){
 	char * thread_fork_name = (char *)f->R.rdi;
 	
 	ptr_check(thread_fork_name);
@@ -180,8 +209,8 @@ int sc_fork(struct intr_frame *f){
 	return fid;
 }
 
-static
-void sc_exec(struct intr_frame *f){
+static void 
+sc_exec(struct intr_frame *f){
 	char * file = (char *)f->R.rdi;
 	int success = 0;
 	ptr_check(file);
@@ -196,14 +225,14 @@ void sc_exec(struct intr_frame *f){
 	}
 }
 
-static
-int sc_wait(struct intr_frame *f){
+static int 
+sc_wait(struct intr_frame *f){
 	tid_t pid = (tid_t)f->R.rdi;
 	return process_wait(pid);
 }
 
-static
-bool sc_create(struct intr_frame *f){
+static bool 
+sc_create(struct intr_frame *f){
 	char *file_create_name = (char *)f->R.rdi;
 	off_t initial_size = (off_t)f->R.rsi;
 
@@ -216,8 +245,8 @@ bool sc_create(struct intr_frame *f){
 	return success; 
 }
 
-static
-bool sc_remove(struct intr_frame *f){
+static bool 
+sc_remove(struct intr_frame *f){
 	char *file_remove_name = (char *)f->R.rdi;
 
 	ptr_check(file_remove_name);
@@ -229,8 +258,8 @@ bool sc_remove(struct intr_frame *f){
 	return success;
 }
 
-static
-int sc_open(struct intr_frame *f){
+static int 
+sc_open(struct intr_frame *f){
 	char *file_open_name = (char *)f->R.rdi;
 	struct thread *curr = thread_current();
 	int fd = curr->next_fd;
@@ -256,8 +285,8 @@ int sc_open(struct intr_frame *f){
 	return fd;
 }
 
-static
-int sc_filesize(struct intr_frame *f){
+static int 
+sc_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
@@ -269,8 +298,8 @@ int sc_filesize(struct intr_frame *f){
 	return success;
 }
 
-static
-int sc_read(struct intr_frame *f){
+static int 
+sc_read(struct intr_frame *f){
 	int fd = f->R.rdi;
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = (unsigned)f->R.rdx;
@@ -299,8 +328,8 @@ int sc_read(struct intr_frame *f){
 	return real_read;
 }
 
-static
-int sc_write(struct intr_frame *f){
+static int 
+sc_write(struct intr_frame *f){
 	int fd = f->R.rdi;
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = (unsigned)f->R.rdx;
@@ -323,8 +352,8 @@ int sc_write(struct intr_frame *f){
 	return real_write;
 }
 
-static
-void sc_seek(struct intr_frame *f){
+static void 
+sc_seek(struct intr_frame *f){
 	int fd = f->R.rdi;
 	unsigned position = (unsigned)f->R.rsi;
 
@@ -335,8 +364,8 @@ void sc_seek(struct intr_frame *f){
 	lock_release(&filesys_lock);
 }
 
-static
-unsigned sc_tell(struct intr_frame *f){
+static unsigned 
+sc_tell(struct intr_frame *f){
 	int fd = f->R.rdi;
 
 	fd_check(fd);
@@ -347,8 +376,8 @@ unsigned sc_tell(struct intr_frame *f){
 	return success;
 }
 
-static
-void sc_close(struct intr_frame *f){
+static void 
+sc_close(struct intr_frame *f){
 	int fd = f->R.rdi;
 	
 	fd_check(fd);
@@ -358,10 +387,11 @@ void sc_close(struct intr_frame *f){
 	file_close(cur_file);
 	lock_release(&filesys_lock);
 }
+
 #ifdef VM
 
-static
-void *sc_mmap(struct intr_frame *f){
+static void 
+*sc_mmap(struct intr_frame *f){
 	void *addr = (void *)f->R.rdi;
 	size_t length = (size_t)f->R.rsi;
 	int writable = f->R.rdx;
@@ -405,8 +435,8 @@ void *sc_mmap(struct intr_frame *f){
 
 }
 
-static
-void sc_munmap(struct intr_frame *f){
+static void 
+sc_munmap(struct intr_frame *f){
 	void *addr = (void *)f->R.rdi;
 
 	ptr_check(addr);
@@ -420,9 +450,62 @@ void sc_munmap(struct intr_frame *f){
 }
 
 #endif
+
+//#ifdef EFILESYS
+static bool 
+sc_chdir(struct intr_frame *){
+	char *dir = (char *)f->R.rdi;
+	bool succ = false;
+	/*프로세스의 현재 작업 디렉토리를 상대 또는 절대일 수 있는 dir로 변경합니다. 
+	성공하면 true를, 실패하면 false를 반환합니다. */
+
+}
+
+static bool 
+sc_mkdir(struct intr_frame *){
+	char *dir = (char *)f->R.rdi;
+	bool succ = false;
+	/*상대 또는 절대일 수 있는 dir이라는 디렉토리를 생성합니다. 
+	성공하면 true를, 실패하면 false를 반환합니다. 
+	dir이 이미 존재하거나 dir에 마지막 디렉터리 이름 외에 
+	이미 존재하지 않는 디렉터리 이름이 있는 경우 실패합니다*/
+}
+
+static bool 
+sc_readdir(struct intr_frame *){
+	int fd = f->R.rdi;
+	char *name = (char *)f->R.rsi;
+
+}
+
+static bool 
+sc_isdir(struct intr_frame *){
+	int fd = f->R.rdi;
+	/*fd가 디렉토리를 나타내는 경우 
+	true를 반환하고 일반 파일을 나타내는 경우 false를 반환합니다.*/
+}
+
+static int 
+sc_inumber(struct intr_frame *){
+	int fd = f->R.rdi;
+	/*일반 파일이나 디렉토리를 나타낼 수 있는 fd와 관련된 inode의 inode 번호를 반환합니다.
+	inode 번호는 파일이나 디렉토리를 지속적으로 식별합니다. 파일이 존재하는 동안 고유합니다. 
+	Pintos에서는 inode의 섹터 번호가 inode 번호로 사용하기에 적합합니다.*/
+}
+
+static int 
+sc_symlink(struct intr_frame *){
+	char *target = (char *)f->R.rdi;
+	char *linkpath = (char *)f->R.rsi;
+	/*문자열 target을 포함하는 linkpath라는 심볼릭 링크를 생성합니다. 
+	성공하면 0이 반환됩니다. 그렇지 않으면 -1이 반환됩니다.*/
+}
+
+//#endif
+
 /* 현재 존재하는 파일을 가져올때 파일이 없다면 exit(-1) 함*/
-static
-struct file *get_file(int fd){
+static struct file *
+get_file(int fd){
 	struct thread *curr = thread_current();
 
 	if(*(curr->fdt + fd) == NULL){
@@ -432,8 +515,8 @@ struct file *get_file(int fd){
 	return *(curr->fdt + fd);
 }
 
-static
-void ptr_check(void *ptr)
+static void 
+ptr_check(void *ptr)
 {
     if (ptr == NULL|| !is_user_vaddr((uint64_t)ptr))
     {
@@ -441,8 +524,8 @@ void ptr_check(void *ptr)
     }
 }
 
-static 
-void fd_check(int fd)
+static void 
+fd_check(int fd)
 {
     if (fd < 0 || fd >= 128)
     {
@@ -454,8 +537,8 @@ void fd_check(int fd)
  * 새로운 파일 객체제 대한 파일 디스크립터 생성하는 함수
  * fdt에도 추가해준다.
  */
-static
-int process_add_file(struct file *f)
+static int 
+process_add_file(struct file *f)
 {
 	struct thread *cur = thread_current();
 	struct file **fdt = cur->fdt;
