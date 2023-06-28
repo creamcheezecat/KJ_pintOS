@@ -159,9 +159,13 @@ fat_fs_init (void) {
 	data_start파일 저장을 시작할 수 있는 섹터를 저장합니다. 
 	fat_fs->bs에 저장된 일부 값을 이용할 수 있습니다 . 
 	또한 이 함수에서 다른 유용한 데이터를 초기화할 수도 있습니다.*/
-	fat_fs->fat_length = fat_fs->bs.total_sectors; // 시스템의 클러스터 수
-	fat_fs->data_start = fat_fs->bs.fat_start; // 저장을 시작할 수 있는 섹터
-	fat_fs->last_clst =  0; // EOchain?? -1 ??
+	// 시스템의 클러스터 수
+	fat_fs->fat_length = fat_fs->bs.total_sectors / SECTORS_PER_CLUSTER;
+
+	// 저장을 시작할 수 있는 섹터
+	fat_fs->data_start = fat_fs->bs.fat_start + fat_fs->bs.fat_sectors;
+	
+	//fat_fs->last_clst =  0; // EOchain?? -1 ??
 	lock_init(&fat_fs->write_lock);
 }
 
@@ -182,25 +186,30 @@ fat_create_chain (cluster_t clst) {
 	/* TODO: Your code goes here. */
 	/*clst(클러스터 인덱싱 번호) 에 지정된 클러스터 뒤에 클러스터를 추가하여 체인을 확장합니다 . 
 	0과 같으면 clst새 체인을 만듭니다. 새로 할당된 클러스터의 클러스터 번호를 반환합니다*/
-	if(clst != 0){
-		fat_fs->fat[fat_fs->last_clst] = fat_fs->fat[clst];
-		if(fat_fs->fat[clst] != 0){
-			printf("이미 안에 있는데 로직이 맞나?\n");
-			return 0;
-		}
-		fat_fs->fat[clst] = EOChain;
-		fat_fs->last_clst = clst;
-		return clst;
+	cluster_t idx = 2;
+
+	while(fat_get(idx) != 0 && idx < fat_fs->fat_length){
+		++idx;
 	}
 
-	for(cluster_t idx = 0 ; idx < fat_fs->fat_length ; idx++){
-		if(fat_fs->fat[idx] == 0){
-			fat_fs->fat[idx] = EOChain;
-			fat_fs->last_clst = idx;
-			return idx;
-		}
+	//FAT가 다 찼다면 
+	if (idx == fat_fs->fat_length){
+		return 0;
 	}
-	return 0;
+	// FAT 안의 값 변경
+	fat_put(idx, EOChain);
+
+	// 새로운 체인 생성
+	if(clst == 0){
+		return idx;
+	}
+	// clst 가 이미 체인이 형성되어 있다면 끝을 찾아 변경
+	while(fat_get(clst) != EOChain){
+		clst = fat_get(clst);
+	}
+	// 체인을 확장
+	fat_put(clst,idx);
+	return idx;
 }
 
 /* Remove the chain of clusters starting from CLST.
@@ -214,21 +223,18 @@ fat_remove_chain (cluster_t clst, cluster_t pclst) {
 	pclst체인의 바로 이전 클러스터여야 합니다. 
 	즉, 이 함수 실행 후 pclst업데이트된 체인의 마지막 요소여야 합니다. 
 	clst체인의 첫 번째 요소인 경우 pclst 0이어야 합니다.*/
-	if (pclst == 0) {
-        // clst가 체인의 첫 번째 요소인 경우
-        fat_fs->fat[clst] = EOChain;
-        clst = fat_fs->fat[clst];
-    } else {
-        // clst가 체인의 중간이나 끝에 위치한 경우
-        fat_fs->fat[pclst] = EOChain;
-    }
+	if(fat_get(pclst) == 0){
+		fat_put(clst,EOChain);
+		clst = fat_get(clst);
+	}else {
+		fat_put(pclst,EOChain);
+	}
 
-    while (clst != EOChain) {
-        cluster_t next_clst = fat_fs->fat[clst];
-        fat_fs->fat[clst] = 0;  // 클러스터를 제거하기 위해 0으로 설정
-        clst = next_clst;
-    }
-
+	while(fat_get(clst) != EOChain){
+		cluster_t next_clst = fat_get(clst);
+		fat_put(clst, NULL);
+		clst = next_clst;
+	}
 }
 
 /* Update a value in the FAT table. */
@@ -238,16 +244,7 @@ fat_put (cluster_t clst, cluster_t val) {
 	/*클러스터 번호가 가리키는 FAT 항목을 로 업데이트 합니다. clst to val. 
 	FAT의 각 항목은 체인의 다음 클러스터(있는 경우, 그렇지 않은 경우 
 	EOChain)를 가리키므로 연결을 업데이트하는 데 사용할 수 있습니다.*/
-
-	if (fat_fs->fat[clst] == EOChain) {
-        // clst가 EOChain을 가리키는 경우
-        fat_fs->fat[clst] = val;
-        fat_fs->fat[val] = EOChain;
-    } else {
-        cluster_t idx = fat_fs[clst];
-		fat_fs[clst] = val;
-		fat_fs->fat[val] = idx;
-    }
+	fat_fs->fat[clst] = val;
 }
 
 /* Fetch a value in the FAT table. */
@@ -263,5 +260,5 @@ disk_sector_t
 cluster_to_sector (cluster_t clst) {
 	/* TODO: Your code goes here. */
 	/*클러스터 번호를 clst해당 섹터 번호로 변환하고 섹터 번호를 반환합니다*/
-	return fat_fs->data_start + (clst - ROOT_DIR_CLUSTER);
+	return fat_fs->data_start + clst;
 }
