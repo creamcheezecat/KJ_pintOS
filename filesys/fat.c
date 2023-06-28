@@ -262,3 +262,8 @@ cluster_to_sector (cluster_t clst) {
 	/*클러스터 번호를 clst해당 섹터 번호로 변환하고 섹터 번호를 반환합니다*/
 	return fat_fs->data_start + clst;
 }
+
+cluster_t
+sector_to_cluster (disk_sector_t sector){
+	return sector - fat_fs->data_start + 1;
+}
