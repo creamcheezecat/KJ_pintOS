@@ -159,12 +159,17 @@ fat_fs_init (void) {
 	data_start파일 저장을 시작할 수 있는 섹터를 저장합니다. 
 	fat_fs->bs에 저장된 일부 값을 이용할 수 있습니다 . 
 	또한 이 함수에서 다른 유용한 데이터를 초기화할 수도 있습니다.*/
+
+	//fat_fs->fat = NULL;
+
 	// 시스템의 클러스터 수
-	fat_fs->fat_length = fat_fs->bs.total_sectors / SECTORS_PER_CLUSTER;
+	fat_fs->fat_length = fat_fs->bs.fat_sectors;
 
 	// 저장을 시작할 수 있는 섹터
 	fat_fs->data_start = fat_fs->bs.fat_start + fat_fs->bs.fat_sectors;
 	
+	//fat_fs->last_clst
+
 	//fat_fs->last_clst =  0; // EOchain?? -1 ??
 	lock_init(&fat_fs->write_lock);
 }
@@ -223,10 +228,7 @@ fat_remove_chain (cluster_t clst, cluster_t pclst) {
 	pclst체인의 바로 이전 클러스터여야 합니다. 
 	즉, 이 함수 실행 후 pclst업데이트된 체인의 마지막 요소여야 합니다. 
 	clst체인의 첫 번째 요소인 경우 pclst 0이어야 합니다.*/
-	if(fat_get(pclst) == 0){
-		fat_put(clst,EOChain);
-		clst = fat_get(clst);
-	}else {
+	if(pclst){
 		fat_put(pclst,EOChain);
 	}
 
@@ -235,6 +237,7 @@ fat_remove_chain (cluster_t clst, cluster_t pclst) {
 		fat_put(clst, NULL);
 		clst = next_clst;
 	}
+	fat_put(clst,0);
 }
 
 /* Update a value in the FAT table. */

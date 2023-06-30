@@ -12,12 +12,12 @@
 
 /* On-disk inode.
  * Must be exactly DISK_SECTOR_SIZE bytes long. */
-// struct inode_disk {
-// 	disk_sector_t start;                /* First data sector. */
-// 	off_t length;                       /* File size in bytes. */
-// 	unsigned magic;                     /* Magic number. */
-// 	uint32_t unused[125];               /* Not used. */
-// };
+struct inode_disk {
+	disk_sector_t start;                /* First data sector. */
+	off_t length;                       /* File size in bytes. */
+	unsigned magic;                     /* Magic number. */
+	uint32_t unused[499];               /* Not used. */
+};
 
 /* Returns the number of sectors to allocate for an inode SIZE
  * bytes long. */
@@ -27,14 +27,14 @@ bytes_to_sectors (off_t size) {
 }
 
 /* In-memory inode. */
-// struct inode {
-// 	struct list_elem elem;              /* Element in inode list. */
-// 	disk_sector_t sector;               /* Sector number of disk location. */
-// 	int open_cnt;                       /* Number of openers. */
-// 	bool removed;                       /* True if deleted, false otherwise. */
-// 	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-// 	struct inode_disk data;             /* Inode content. */
-// };
+struct inode {
+	struct list_elem elem;              /* Element in inode list. */
+	disk_sector_t sector;               /* Sector number of disk location. */
+	int open_cnt;                       /* Number of openers. */
+	bool removed;                       /* True if deleted, false otherwise. */
+	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+	struct inode_disk data;             /* Inode content. */
+};
 
 //수정 필요
 /* Returns the disk sector that contains byte offset POS within
@@ -52,7 +52,7 @@ byte_to_sector (const struct inode *inode, off_t pos) {
 		for(unsigned i = 0; i < (pos / DISK_SECTOR_SIZE * SECTORS_PER_CLUSTER); i++){
 			clst = fat_get(clst);
 			if(clst == 0){
-				return -1
+				return -1;
 			}
 		}
 		return cluster_to_sector(clst);
@@ -89,12 +89,9 @@ inode_create (disk_sector_t sector, off_t length) {
 
 	ASSERT (length >= 0);
 
-	/* If this assertion fails, the inode structure is not exactly
-	 * one sector in size, and you should fix that. */
-	ASSERT (sizeof *disk_inode == DISK_SECTOR_SIZE);
-
-
 	#ifdef EFILESYS
+
+	char buffer[DISK_SECTOR_SIZE];
 	cluster_t clst = sector_to_cluster(sector); 
 	cluster_t newclst = clst;
 	if(sector > 0){
@@ -110,13 +107,16 @@ inode_create (disk_sector_t sector, off_t length) {
 				clst = newclst;
 			}
 
-			disk_write(filesys_disk,cluster_to_sector(newclst),char buffer[DISK_SECTOR_SIZE]);
+			disk_write(filesys_disk,cluster_to_sector(newclst),buffer);
 		}
 	}
 	success = true;
 
 	#else
 	struct inode_disk *disk_inode = NULL;
+	/* If this assertion fails, the inode structure is not exactly
+	 * one sector in size, and you should fix that. */
+	ASSERT (sizeof *disk_inode == DISK_SECTOR_SIZE);
 	disk_inode = calloc (1, sizeof *disk_inode);
 	if (disk_inode != NULL) {
 		size_t sectors = bytes_to_sectors (length);
@@ -312,7 +312,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 		disk_write(filesys_disk, cluster_to_sector(new_clst), zero);
 
-		if(inode_ofs ! = 0){
+		if(inode_ofs != 0){
 			disk_read(filesys_disk, cluster_to_sector(end_clst),zero);
 			memset (zero + inode_ofs + 1 , 0, DISK_SECTOR_SIZE - inode_ofs);
 			disk_write(filesys_disk, cluster_to_sector(end_clst),zero);

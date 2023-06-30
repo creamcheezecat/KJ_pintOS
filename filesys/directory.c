@@ -22,7 +22,7 @@ struct dir_entry {
 /* Creates a directory with space for ENTRY_CNT entries in the
  * given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (disk_sector_t sector, size_t entry_cnt) {
+ir_create (disk_sector_t sector, size_t entry_cnt) {
 	return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
 }
 
@@ -103,6 +103,10 @@ lookup (const struct dir *dir, const char *name,
  * and returns true if one exists, false otherwise.
  * On success, sets *INODE to an inode for the file, otherwise to
  * a null pointer.  The caller must close *INODE. */
+/* 주어진 이름과 일치하는 파일을 DIR에서 검색하고,
+파일이 존재하는 경우 true를 반환하며, 그렇지 않으면 false를 반환합니다.
+성공한 경우, *INODE를 파일의 inode로 설정하고, 그렇지 않으면
+null 포인터로 설정합니다. 호출자는 *INODE를 닫아야 합니다. */
 bool
 dir_lookup (const struct dir *dir, const char *name,
 		struct inode **inode) {

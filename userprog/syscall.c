@@ -453,7 +453,7 @@ sc_munmap(struct intr_frame *f){
 
 //#ifdef EFILESYS
 static bool 
-sc_chdir(struct intr_frame *){
+sc_chdir(struct intr_frame *f){
 	char *dir = (char *)f->R.rdi;
 	bool succ = false;
 	/*프로세스의 현재 작업 디렉토리를 상대 또는 절대일 수 있는 dir로 변경합니다. 
@@ -462,7 +462,7 @@ sc_chdir(struct intr_frame *){
 }
 
 static bool 
-sc_mkdir(struct intr_frame *){
+sc_mkdir(struct intr_frame *f){
 	char *dir = (char *)f->R.rdi;
 	bool succ = false;
 	/*상대 또는 절대일 수 있는 dir이라는 디렉토리를 생성합니다. 
@@ -472,21 +472,21 @@ sc_mkdir(struct intr_frame *){
 }
 
 static bool 
-sc_readdir(struct intr_frame *){
+sc_readdir(struct intr_frame *f){
 	int fd = f->R.rdi;
 	char *name = (char *)f->R.rsi;
 
 }
 
 static bool 
-sc_isdir(struct intr_frame *){
+sc_isdir(struct intr_frame *f){
 	int fd = f->R.rdi;
 	/*fd가 디렉토리를 나타내는 경우 
 	true를 반환하고 일반 파일을 나타내는 경우 false를 반환합니다.*/
 }
 
 static int 
-sc_inumber(struct intr_frame *){
+sc_inumber(struct intr_frame *f){
 	int fd = f->R.rdi;
 	/*일반 파일이나 디렉토리를 나타낼 수 있는 fd와 관련된 inode의 inode 번호를 반환합니다.
 	inode 번호는 파일이나 디렉토리를 지속적으로 식별합니다. 파일이 존재하는 동안 고유합니다. 
@@ -494,7 +494,7 @@ sc_inumber(struct intr_frame *){
 }
 
 static int 
-sc_symlink(struct intr_frame *){
+sc_symlink(struct intr_frame *f){
 	char *target = (char *)f->R.rdi;
 	char *linkpath = (char *)f->R.rsi;
 	/*문자열 target을 포함하는 linkpath라는 심볼릭 링크를 생성합니다. 
