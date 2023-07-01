@@ -168,9 +168,8 @@ fat_fs_init (void) {
 	// 저장을 시작할 수 있는 섹터
 	fat_fs->data_start = fat_fs->bs.fat_start + fat_fs->bs.fat_sectors;
 	
-	//fat_fs->last_clst
-
-	//fat_fs->last_clst =  0; // EOchain?? -1 ??
+	fat_fs->last_clst =  1; // EOchain?? -1 ??
+	
 	lock_init(&fat_fs->write_lock);
 }
 

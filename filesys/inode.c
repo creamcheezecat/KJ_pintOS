@@ -287,7 +287,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 	if (inode->deny_write_cnt)
 		return 0;
-	//#ifdef EFILESYS
+	#ifdef EFILESYS
 	/* 쓸 섹터와 섹터 내에서 시작하는 바이트 오프셋입니다. */
 	// 'offset'으로부터 'size'를 쓰기에 충분한 메모리가 있는지 확인합니다.
 	disk_sector_t sector_idx = byte_to_sector(inode, offset + size);
@@ -321,7 +321,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 		inode->data.length += DISK_SECTOR_SIZE;
 		sector_idx = byte_to_sector(inode,offset + size);
 	}
-	//#endif
+	#endif
 	while (size > 0) {
 		/* Sector to write, starting byte offset within sector. */
 		disk_sector_t sector_idx = byte_to_sector (inode, offset);
@@ -395,4 +395,35 @@ inode_allow_write (struct inode *inode) {
 off_t
 inode_length (const struct inode *inode) {
 	return inode->data.length;
+}
+
+bool
+inode_create_by_fat(cluster_t *newclst, off_t length){
+	bool succ = false;
+	ASSERT(newclst != 0);
+	ASSERT(length >= 0);
+
+	size_t clusters = bytes_to_sectors(length);
+	cluster_t clst = 0;
+
+	if(cluster_t > 0){
+		static char zeros[DISK_SECTOR_SIZE];
+		
+		for(int i = 0; i < clusters ; i++){
+			clst = fat_create_chain(clst);
+			
+			if(clst == 0){
+				fat_remove_chain(*newclst, 0);
+				return false;
+			}
+
+			if(i == 0){
+				*newclst = clst;
+			}
+
+			disk_write(filesys_disk, cluster_to_sector(clst), zeros);
+		}
+	}
+
+	return true;
 }

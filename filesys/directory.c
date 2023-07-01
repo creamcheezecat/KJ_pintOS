@@ -226,3 +226,29 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1]) {
 	}
 	return false;
 }
+
+/*==================================================================*/
+
+bool
+dir_add_by_fat(struct dir *dir, const char *name, cluster_t clst, off_t initial_size){
+	struct dir_entry e;
+	off_t ofs;
+	bool succ = false;
+
+	ASSERT(dir != NULL);
+	ASSERT(name != NULL);
+
+	/* Check Name for Validity */
+	if(*name == '\0' || strlen(name) > NAME_MAX){
+		return false;
+	}
+
+	/* Check that Name is not in use */
+	if(lookup(dir, name, NULL, NULL)){
+		goto done;
+	}
+
+	
+done:
+		return succ;
+}
