@@ -48,14 +48,14 @@ byte_to_sector (const struct inode *inode, off_t pos) {
 	ASSERT (inode != NULL);
 	if (pos < inode->data.length){
 	#ifdef EFILESYS
-		cluster_t clst = sector_to_cluster(inode->data.start);
-		for(unsigned i = 0; i < (pos / DISK_SECTOR_SIZE * SECTORS_PER_CLUSTER); i++){
-			clst = fat_get(clst);
-			if(clst == 0){
-				return -1;
-			}
-		}
-		return cluster_to_sector(clst);
+		cluster_t cur = inode->data.start;
+        uint32_t cnt = pos / DISK_SECTOR_SIZE;
+        int i = 0;
+        for (i ; i < cnt ; i++)
+        {
+            cur = fat_get(cur);
+        }
+        return cur;
 	#else
 		return inode->data.start + pos / DISK_SECTOR_SIZE;
 	#endif
@@ -86,38 +86,51 @@ inode_init (void) {
 bool
 inode_create (disk_sector_t sector, off_t length) {
 	bool success = false;
-
+	struct inode_disk *disk_inode = NULL;
 	ASSERT (length >= 0);
-
+	ASSERT(sizeof *disk_inode == DISK_SECTOR_SIZE);
+ 
+    disk_inode = calloc(1, sizeof *disk_inode);
 	#ifdef EFILESYS
 
-	char buffer[DISK_SECTOR_SIZE];
-	cluster_t clst = sector_to_cluster(sector); 
-	cluster_t newclst = clst;
-	if(sector > 0){
-		for (int i = 0 ; i < sector; i++){
-			newclst = fat_create_chain(newclst);
-			
-			if(newclst == 0){
-				fat_remove_chain(clst , 0);
-				return false;
-			}
-			
-			if(i == 0){
-				clst = newclst;
-			}
-
-			disk_write(filesys_disk,cluster_to_sector(newclst),buffer);
-		}
-	}
-	success = true;
-
+	/* ---------------------------- >> Project.4 FAT >> ---------------------------- */
+    if (disk_inode != NULL)
+    {
+        size_t sectors = bytes_to_sectors(length);
+        disk_inode->length = length;
+        disk_inode->magic = INODE_MAGIC;
+        
+        // 남은 자유 블륵이 sectors보다 많은가 
+        if (ctrl_free_blocks_EA(0) >= sectors)
+        {
+            disk_write(filesys_disk, sector, disk_inode);
+            if (sectors > 0)
+            {
+                static char zeros[DISK_SECTOR_SIZE];
+                size_t i;
+ 
+                // chain을 만든다.
+                disk_inode->start = fat_create_chain(0);
+                // 3.5 추가 >>
+                disk_write(filesys_disk, sector, disk_inode);
+                // << 3.5 추가
+                disk_sector_t prev = disk_inode->start;
+                for (i = 1; i < sectors; i++)
+                {
+                    // 섹터가 2개 이상이면 chain으로 이어준다. 
+                    disk_sector_t sector_idx = fat_create_chain(prev);
+                    disk_write(filesys_disk, sector_idx, zeros);
+                    prev = sector_idx;
+                }
+            }
+            success = true;
+        }
+        free(disk_inode);
+    }
+	/* ---------------------------- << Project.4 FAT << ---------------------------- */
 	#else
-	struct inode_disk *disk_inode = NULL;
 	/* If this assertion fails, the inode structure is not exactly
 	 * one sector in size, and you should fix that. */
-	ASSERT (sizeof *disk_inode == DISK_SECTOR_SIZE);
-	disk_inode = calloc (1, sizeof *disk_inode);
 	if (disk_inode != NULL) {
 		size_t sectors = bytes_to_sectors (length);
 		disk_inode->length = length;
@@ -204,7 +217,8 @@ inode_close (struct inode *inode) {
 		/* Deallocate blocks if removed. */
 		if (inode->removed) {
 			#ifdef EFILESYS
-			fat_remove_chain(sector_to_cluster(inode->sector), 0);
+			fat_remove_chain(inode->sector, 0);
+            fat_remove_chain(inode->data.start, 0);
 			#else
 			free_map_release (inode->sector, 1);
 			free_map_release (inode->data.start,
@@ -287,41 +301,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 
 	if (inode->deny_write_cnt)
 		return 0;
-	#ifdef EFILESYS
-	/* 쓸 섹터와 섹터 내에서 시작하는 바이트 오프셋입니다. */
-	// 'offset'으로부터 'size'를 쓰기에 충분한 메모리가 있는지 확인합니다.
-	disk_sector_t sector_idx = byte_to_sector(inode, offset + size);
-	uint8_t zero[DISK_SECTOR_SIZE]; // buffer for zero padding
 
-	while(sector_idx == -1){
-		off_t inode_len = inode_length(inode);
-		cluster_t end_clst = sector_to_cluster(byte_to_sector(inode, inode_len -1));
-		cluster_t new_clst = inode_len == 0 ? end_clst : fat_create_chain(end_clst);
-
-		if (new_clst == 0){
-			// 디스크 안에 공간이 더 없다.
-			break;
-		}
-		// zero padding
-		memset(zero, 0, DISK_SECTOR_SIZE);
-
-		off_t inode_ofs = inode_len % DISK_SECTOR_SIZE;
-		if(inode_ofs != 0){
-			inode->data.length += DISK_SECTOR_SIZE - inode_ofs;
-		}
-
-		disk_write(filesys_disk, cluster_to_sector(new_clst), zero);
-
-		if(inode_ofs != 0){
-			disk_read(filesys_disk, cluster_to_sector(end_clst),zero);
-			memset (zero + inode_ofs + 1 , 0, DISK_SECTOR_SIZE - inode_ofs);
-			disk_write(filesys_disk, cluster_to_sector(end_clst),zero);
-		}
-
-		inode->data.length += DISK_SECTOR_SIZE;
-		sector_idx = byte_to_sector(inode,offset + size);
-	}
-	#endif
 	while (size > 0) {
 		/* Sector to write, starting byte offset within sector. */
 		disk_sector_t sector_idx = byte_to_sector (inode, offset);
@@ -395,35 +375,4 @@ inode_allow_write (struct inode *inode) {
 off_t
 inode_length (const struct inode *inode) {
 	return inode->data.length;
-}
-
-bool
-inode_create_by_fat(cluster_t *newclst, off_t length){
-	bool succ = false;
-	ASSERT(newclst != 0);
-	ASSERT(length >= 0);
-
-	size_t clusters = bytes_to_sectors(length);
-	cluster_t clst = 0;
-
-	if(cluster_t > 0){
-		static char zeros[DISK_SECTOR_SIZE];
-		
-		for(int i = 0; i < clusters ; i++){
-			clst = fat_create_chain(clst);
-			
-			if(clst == 0){
-				fat_remove_chain(*newclst, 0);
-				return false;
-			}
-
-			if(i == 0){
-				*newclst = clst;
-			}
-
-			disk_write(filesys_disk, cluster_to_sector(clst), zeros);
-		}
-	}
-
-	return true;
 }

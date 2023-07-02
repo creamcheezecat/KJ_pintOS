@@ -39,4 +39,9 @@ disk_sector_t cluster_to_sector (cluster_t clst);
 
 cluster_t sector_to_cluster (disk_sector_t sector);
 
+/* ---------------------------- >> Project.4 FAT >> ---------------------------- */
+cluster_t get_free_cluster(void);
+size_t ctrl_free_blocks_EA(uint32_t);
+/* ---------------------------- << Project.4 FAT << ---------------------------- */
+
 #endif /* filesys/fat.h */
